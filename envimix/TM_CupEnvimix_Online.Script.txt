@@ -4,7 +4,7 @@
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
 #Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
-#Const	Version							"1.1.0+2024-10-28"
+#Const	Version							"2025-01-12+1"
 #Const	ScriptName					"Modes/TrackMania/TM_Cup_Online.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -36,6 +36,7 @@
 #Setting S_SnowCarEnabled True as _("Should the snow car be enabled")
 #Setting S_RallyCarEnabled True as _("Should the rally car be enabled")
 #Setting S_DesertCarEnabled True as _("Should the desert car be enabled")
+#Setting S_RandomiseCarOrderPerMap False as _("Should the car order be randomised on each map")
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
@@ -47,6 +48,8 @@
 #Const C_HudModulePath "" //< Path to the hud module
 #Const C_ManiaAppUrl "file://Media/ManiaApps/Nadeo/Trackmania/Modes/Cup.Script.txt" //< Url of the mania app
 #Const C_FakeUsersNb 0
+
+#Const C_Text_NextRoundTimer _("%1Next round in %2s")
 
 #Const C_UploadRecord False
 #Const C_DisplayRecordGhost False
@@ -195,8 +198,8 @@ ModelIds["CarDesert"] = ItemList_Add("CarDesert");
  if (S_RallyCarEnabled) {
 	ModelNames.add("CarRally");
  }
-
-declare Integer CarIndex = ML::Rand(0,ModelNames.count-1);
+ModelNames = RandomiseCarList(ModelNames);
+declare Integer CarIndex = 0;
 ***
 
 ***Match_StartMatch***
@@ -209,6 +212,9 @@ UIModules_ScoresTable::SetCustomPoints([]);
 G_NbOfValidRounds = 0;
 UIModules_ScoresTable::DisplayRoundPoints(True);
 UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
+if (S_RandomiseCarOrderPerMap == True) {
+	ModelNames = RandomiseCarList(ModelNames);
+}
 ***
 
 ***Match_StartMap***
@@ -257,6 +263,19 @@ foreach (Player in Players) {
 		Player.ForceModelId = ModelIds[StartingCar];
 	}
 }
+UIModules_BigMessage::SetMessage("Next Car: " ^ StartingCar, 3000);
+UIModules_BigMessage::SetOffset(<0., -40.>);
+UIManager.UIAll.BigMessageSound = CUIConfig::EUISound::Default;
+UIManager.UIAll.BigMessageSoundVariant = 0;
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "3");
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "2");
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "1");
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = "";
+StartTime = Now + Race::C_SpawnDuration;
 ***
 
 ***Match_StartRound***
@@ -658,4 +677,14 @@ Boolean MatchIsOver() {
 	if (NbOfScoreWinners >= S_NbOfWinners || NbOfPlayerWinners >= PlayerWinnersLimit) return True;
 
 	return False;
+}
+
+Text[] RandomiseCarList(Text[] _CarList) {
+	declare Text[] NewCarList = [];
+	while (NewCarList.count < _CarList.count) {
+		declare Integer RandomIndex = ML::Rand(0, _CarList.count - 1);
+		if (NewCarList.exists(_CarList[RandomIndex])) continue;
+		NewCarList.add(_CarList[RandomIndex]);
+	}
+	return NewCarList;
 }

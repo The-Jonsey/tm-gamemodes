@@ -4,7 +4,7 @@
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
 #Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
-#Const	Version							"1.1.0+2024-10-28"
+#Const	Version							"2025-01-12+1"
 #Const	ScriptName					"Modes/TrackMania/TM_KnockoutEnvimix_Online.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -42,6 +42,7 @@
 #Setting S_SnowCarEnabled True as _("Should the snow car be enabled")
 #Setting S_RallyCarEnabled True as _("Should the rally car be enabled")
 #Setting S_DesertCarEnabled True as _("Should the desert car be enabled")
+#Setting S_RandomiseCarOrderPerMap False as _("Should the car order be randomised on each map")
 
 /* About S_EliminatedPlayersNbRanks
  * Example : "8,16"
@@ -250,8 +251,8 @@ ModelIds["CarDesert"] = ItemList_Add("CarDesert");
  if (S_RallyCarEnabled) {
 	ModelNames.add("CarRally");
  }
-
-declare Integer CarIndex = ML::Rand(0,ModelNames.count-1);
+ ModelNames = RandomiseCarList(ModelNames);
+ declare Integer CarIndex = 0;
 ***
 
 ***Match_StartMatch***
@@ -277,6 +278,9 @@ UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRound
 UpdateCustomRanking();
 UIModules_KnockoutInfo::UpdateLiveRanking();
 UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
+if (S_RandomiseCarOrderPerMap == True) {
+	ModelNames = RandomiseCarList(ModelNames);
+}
 ***
 
 ***Match_StartMap***
@@ -318,6 +322,8 @@ foreach (Player in Players) {
 		Player.ForceModelId = ModelIds[StartingCar];
 	}
 }
+UIModules_BigMessage::SetMessage("Next Car: " ^ StartingCar, 3000);
+UIModules_BigMessage::SetOffset(<0., -40.>);
 declare Text[] Round_EliminatedPlayers = []; // accountids
 declare Integer Round_EliminatedPlayersNb;
 declare Boolean NeedInfoDisplayUpdate;
@@ -360,19 +366,17 @@ if (Round_EliminatedPlayersNb > 1) {
 UIModules_BigMessage::SetMessage(ObjectiveMessage, 5500);
 UIModules_BigMessage::SetOffset(<0., -40.>);
 
-if (Map_DisplayCustom321Go) {
-	UIManager.UIAll.BigMessageSound = CUIConfig::EUISound::Default;
-	UIManager.UIAll.BigMessageSoundVariant = 0;
-	MB_Sleep(1000);
-	UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "3");
-	MB_Sleep(1000);
-	UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "2");
-	MB_Sleep(1000);
-	UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "1");
-	MB_Sleep(1000);
-	UIManager.UIAll.BigMessage = "";
-	StartTime = Now + Race::C_SpawnDuration;
-}
+UIManager.UIAll.BigMessageSound = CUIConfig::EUISound::Default;
+UIManager.UIAll.BigMessageSoundVariant = 0;
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "3");
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "2");
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "1");
+MB_Sleep(1000);
+UIManager.UIAll.BigMessage = "";
+StartTime = Now + Race::C_SpawnDuration;
 
 // Reset spawn permissions for players and spectators according to Rounds rules
 foreach (Score in Scores) {
@@ -1186,4 +1190,14 @@ Void UpdateKnockoutInfoDisplay(Integer _CurrentRoundNb, Integer _Round_Eliminate
 	UIModules_KnockoutInfo::UpdateLiveRanking();
 	UpdateCustomRanking();
 	UpdateScoresTableFooter(_CurrentRoundNb, TotalRoundsNb);
+}
+
+Text[] RandomiseCarList(Text[] _CarList) {
+	declare Text[] NewCarList = [];
+	while (NewCarList.count < _CarList.count) {
+		declare Integer RandomIndex = ML::Rand(0, _CarList.count - 1);
+		if (NewCarList.exists(_CarList[RandomIndex])) continue;
+		NewCarList.add(_CarList[RandomIndex]);
+	}
+	return NewCarList;
 }
