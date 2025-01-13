@@ -1,5 +1,5 @@
 /**
- *	Knockout mode
+ *	Envimix Knockout mode
  */
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
@@ -64,9 +64,9 @@
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-#Const C_ModeName "Knockout"
+#Const C_ModeName "Envimix Knockout"
 //L16N [Knockout] Description of the mode
-#Const Description _("$zIn $<$t$6F9Knockout$> mode, the goal is to be the last player standing. \n\nYou play a series of races as in Round mode. $<$t$6F9At the end of each race, the last players are eliminated$>!\n\nThe winner is the player who eliminates all of their opponents.")
+#Const Description _("$zIn $<$t$6F9Envimix Knockout$> mode, the goal is to be the last player standing. \n\nYou play a series of races, in each car, as in Round mode. $<$t$6F9At the end of each map, the last players are eliminated$>!\n\nThe winner is the player who eliminates all of their opponents.")
 
 #Const C_HudModulePath "" //< Path to the hud module
 #Const C_ManiaAppUrl "file://Media/ManiaApps/Nadeo/Trackmania/Modes/Knockout.Script.txt" //< Url of the mania app

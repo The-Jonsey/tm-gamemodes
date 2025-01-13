@@ -1,0 +1,51 @@
+name: Update Version Date in .Script.txt Files
+
+on:
+  push:
+    paths:
+      - '**/*.Script.txt'  # Run only on updated .Script.txt files
+    branches:
+      - main  # Adjust to your branch if needed
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set date variables
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          echo "CURRENT_DATE=$TODAY" >> $GITHUB_ENV
+
+      - name: Get all changed Script files
+        id: changed-script-files
+        uses: tj-actions/changed-files@v45
+        with:
+          # Avoid using single or double quotes for multiline patterns
+          files: |
+            **.Script.txt
+            */**.Script.txt
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Update version using Python script
+        env:
+          MODIFIED_FILES: ${{ steps.changed-script-files.outputs.all_changed_files }}
+        run: |
+          python3 update-version.py
+  
+
+      - name: Push changes back to the origin
+        run: |
+          git config --global user.email "louis@thejonsey.com"
+          git config --global user.name "The-Jonsey"
+          git commit -am "[skip ci] Updated script versions"
+          git remote set-url origin https://github.com/${{ github.repository }}.git
+          git push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
