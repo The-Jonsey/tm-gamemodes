@@ -1,0 +1,546 @@
+/**
+ *	TM_Teams_Online mode
+ */
+#Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
+
+#Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
+#Const	Version							"2025-05-13"
+#Const	ScriptName					"Modes/TrackMania/TM_Teams_TugOfWar.Script.txt"
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Libraries
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+#Include "TextLib" as TL
+#Include "MathLib" as ML
+#Include "Libs/Nadeo/CMGame/Utils/Semver.Script.txt" as Semver
+#Include "Libs/Nadeo/Trackmania/Modes/Teams/StateManager.Script.txt" as StateMgr
+#Include "Libs/Nadeo/Trackmania/MainMenu/Constants.Script.txt" as MenuConsts
+#Include "Libs/Nadeo/TMGame/Utils/Tracking.Script.txt" as Tracking
+#Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/Checkpoint_Server.Script.txt" as UIModules_Checkpoint
+#Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/PauseMenuOnline_Server.Script.txt" as UIModules_PauseMenu_Online
+#Include "Libs/Nadeo/TMGame/Modes/Teams/TeamsCommon.Script.txt" as TeamsCommonLib
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Settings
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+#Setting S_FinishTimeout -1 as _("Finish timeout")
+#Setting S_RoundsPerMap -1 as _("Number of rounds per track :") ///< Number of round to play on one map before going to the next one
+#Setting S_MapsPerMatch 1 as _("Number of tracks per match :") ///< Number of maps to play before finishing the matchn
+#Setting S_WarmUpNb 0 as _("Number of warm up :")
+#Setting S_WarmUpDuration 0 as _("Duration of one warm up :")
+#Setting S_WarmUpTimeout -1 as _("Warm up timeout")
+#Setting S_MaxTimeDelta 5.0
+#Setting S_MaxRoundDelta 5.0
+#Setting S_DNFPenalty 5.0
+
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Constants
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+#Const C_ModeName "TM_Teams_TugOfWar"
+//L16N [TM_Teams_Online] Description of the mode rules
+#Const Description _("$zIn $<$t$6F9Team$> mode, you have to choose a team : $<$t$f00Red$> or $<$t$10cBlue$>.\n\nThe team mode consists of $<$t$6F9a series of races$>.\nThe goal for your team is to win a maximum number of $<$t$6F9points$>.\n\nWhen you finish a race with a good $<$t$6F9position$>, you give $<$t$6F9points$> to your team.\nThe $<$t$6F9winning team$> is the first team whose total reaches the $<$t$6F9point limit$> (5 for example).")
+
+#Const C_HudModulePath "" //< Path to the hud module
+#Const C_ManiaAppUrl "file://Media/ManiaApps/Nadeo/Trackmania/Modes/Teams.Script.txt" //< Url of the mania app
+
+#Const C_BlueBotsNb 0
+#Const C_RedBotsNb 0
+
+#Const C_UploadRecord True
+#Const C_DisplayRecordGhost False
+#Const C_DisplayRecordMedal False
+#Const C_CelebrateRecordGhost True
+#Const C_CelebrateRecordMedal True
+
+ #Const C_MlId_LiveRanking "MultiLivesKnockout.LiveRanking"
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Extends
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+***Match_LogVersions***
+***
+Log::RegisterScript(ScriptName, Version);
+Log::RegisterScript(Semver::ScriptName, Semver::Version);
+Log::RegisterScript(ModeUtils::ScriptName, ModeUtils::Version);
+Log::RegisterScript(StateMgr::ScriptName, StateMgr::Version);
+***
+
+***Match_LoadLibraries***
+***
+StateMgr::Load();
+***
+
+***Match_UnloadLibraries***
+***
+StateMgr::Unload();
+***
+
+***Match_Settings***
+***
+MB_Settings_UseDefaultHud = (C_HudModulePath == "");
+***
+
+***Match_Rules***
+***
+ModeInfo::SetName(C_ModeName);
+ModeInfo::SetType(ModeInfo::C_Type_Teams);
+ModeInfo::SetRules(Description);
+ModeInfo::SetStatusMessage("");
+***
+
+***Match_LoadHud***
+***
+if (C_HudModulePath != "") Hud_Load(C_HudModulePath);
+***
+
+***Match_AfterLoadHud***
+***
+ClientManiaAppUrl = C_ManiaAppUrl;
+Race::SortScores(Race::C_Sort_TotalPoints);
+UIModules_Checkpoint::SetVisibilityTimeDiff(False);
+UIModules_Checkpoint::SetRankMode(UIModules_Checkpoint::C_RankMode_CurrentRace);
+UIModules_PauseMenu_Online::SetHelp(Description);
+UIModules_Sign16x9Small::SetScoreMode(UIModules_Sign16x9Small::C_ScoreMode_Points);
+// Hide SM Overlay
+UIManager.UIAll.OverlayHideSpectatorInfos = True;
+UIManager.UIAll.OverlayHideCountdown = True;
+LoadUI();
+***
+
+***Match_Yield***
+***
+foreach (Event in PendingEvents) {
+	switch (Event.Type) {
+		// Initialize players when they join the server
+		case CSmModeEvent::EType::OnPlayerAdded: {
+			StateMgr::InitializePlayer(Event.Player);
+			CarRank::InitializePlayer(Event.Player);
+		}
+	}
+}
+
+StateMgr::Yield();
+***
+
+***Match_InitServer***
+***
+declare Integer Server_RoundsPerMap;
+declare Integer Server_MapsPerMatch;
+
+declare Integer Team1_MapWins = 0;
+declare Integer Team2_MapWins = 0;
+
+declare Integer LatestDeltaVersion = 0;
+***
+
+***Match_StartServer***
+***
+// Initialize mode
+Clans::SetClansNb(2);
+Scores::SaveInScore(Scores::C_Points_Match);
+StateMgr::ForcePlayersStates([StateMgr::C_State_Waiting]);
+WarmUp::SetAvailability(True);
+Race::SetupRecord(
+	MenuConsts::C_ScopeType_Season,
+	MenuConsts::C_ScopeType_PersonalBest,
+	MenuConsts::C_GameMode_TimeAttack,
+	"",
+	C_UploadRecord,
+	C_DisplayRecordGhost,
+	C_DisplayRecordMedal,
+	C_CelebrateRecordGhost,
+	C_CelebrateRecordMedal
+);
+Server_RoundsPerMap = S_RoundsPerMap - 1;
+Server_MapsPerMatch = S_MapsPerMatch - 1;
+***
+
+***Match_InitMap***
+***
+UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
+UIModules_ScoresTable::DisplayRoundPoints(True);
+
+// Restore match points
+Scores::SetClanMapPoints(1, Scores::GetClanMatchPoints(1));
+Scores::SetClanMapPoints(2, Scores::GetClanMatchPoints(2));
+
+declare Integer Map_ValidRoundsNb;
+
+declare Real Map_TimeDelta = 0.0;
+***
+
+***Match_StartMap***
+***
+
+CarRank::Reset();
+
+if (MM_IsMatchServer()) {
+	MM_SetScores([Scores::GetClanMatchPoints(1), Scores::GetClanMatchPoints(2)]);
+} else {
+	// Warm up
+	UIModules_ScoresTable::SetFooterInfo(_("Warm up"));
+	MB_WarmUp(S_WarmUpNb, S_WarmUpDuration * 1000, S_WarmUpTimeout * 1000);
+}
+
+TeamsCommonLib::UpdateScoresTableFooter(0, 0, S_RoundsPerMap, S_MapsPerMatch, Map_ValidRoundsNb, MB_GetMapCount());
+***
+
+***Match_StartRound***
+***
+declare ObjectiveMessage = "";
+
+ObjectiveMessage = TL::Compose(_("Current offset is %1"), "$t$i$fff"^TL::ToText(Map_TimeDelta));
+
+UIModules_BigMessage::SetMessage(ObjectiveMessage, 5500);
+
+// Balance teams in splitscreen mode
+if (S_IsSplitScreen) {
+	foreach (I=>Player in AllPlayers) {
+		SetPlayerClan(Player, (I % 2+1));
+	}
+}
+StateMgr::ForcePlayersStates([StateMgr::C_State_Playing]);
+***
+
+***Rounds_PlayerSpawned***
+***
+CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
+***
+
+***Match_PlayLoop***
+***
+// Manage race events
+declare RacePendingEvents = Race::GetPendingEvents();
+foreach (Event in RacePendingEvents) {
+	Race::ValidEvent(Event);
+
+	// Waypoint
+	if (Event.Type == Events::C_Type_Waypoint) {
+		CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
+		if (Event.Player != Null) {
+			if (Event.IsEndRace) {
+				declare BetterRace = Scores::UpdatePlayerBestRaceIfBetter(Event.Player);
+				declare BetterLap = Scores::UpdatePlayerBestLapIfBetter(Event.Player);
+				Scores::UpdatePlayerPrevRace(Event.Player);
+				// TeamsCommonLib::ComputeLatestRaceScores(S_UseCustomPointsRepartition, S_CumulatePoints, S_UseAlternateRules, S_MaxPointsPerRound);
+				Race::SortScores(Race::C_Sort_TotalPoints);
+
+				// Start the countdown if it's the first player to finish
+				if (EndTime <= 0) {
+					EndTime = TeamsCommonLib::GetFinishTimeout(S_FinishTimeout);
+				}
+
+				SetFinishedRace(Event.Player.Score, True);
+			}
+			if (Event.IsEndLap) {
+				declare Better = Scores::UpdatePlayerBestLapIfBetter(Event.Player);
+			}
+		}
+	}
+}
+
+// Manage mode events
+foreach (Event in PendingEvents) {
+	if (Event.HasBeenPassed || Event.HasBeenDiscarded) continue;
+	Events::Invalid(Event);
+}
+
+// Server info change
+if (
+	Server_RoundsPerMap != S_RoundsPerMap ||
+	Server_MapsPerMatch != S_MapsPerMatch
+) {
+	Server_RoundsPerMap = S_RoundsPerMap;
+	Server_MapsPerMatch = S_MapsPerMatch;
+
+	TeamsCommonLib::UpdateScoresTableFooter(0, 0, S_RoundsPerMap, S_MapsPerMatch, Map_ValidRoundsNb, MB_GetMapCount());
+}
+***
+
+***Match_EndRound***
+***
+Race::StopSkipOutroAll();
+EndTime = -1;
+StateMgr::ForcePlayersStates([StateMgr::C_State_Waiting]);
+CarRank::Update(CarRank::C_SortCriteria_CurrentRace);
+
+if (Semver::Compare(XmlRpc::GetApiVersion(), ">=", "2.1.1")) {
+	Scores::XmlRpc_SendScores(Scores::C_Section_PreEndRound, "");
+}
+
+if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
+	// Do not launch the forced end round sequence after a pause
+	if (!Round_SkipPauseRound) {
+		ForcedEndRoundSequence();
+	}
+	MB_SetValidRound(False);
+} else {
+	Map_ValidRoundsNb += 1;
+
+	declare Real PreviousDelta = Map_TimeDelta;
+
+	if (PreviousDelta < 0.0) {
+		PreviousDelta = PreviousDelta * -1.0;
+	}
+
+	Race::SortScores(Race::C_Sort_PrevRaceTime);
+	declare CSmScore[] PrevRaceRanking = Race::GetPrevRaceRanking();
+
+	declare Integer Team1_DNFPlayers = 0;
+	declare Integer Team2_DNFPlayers = 0;
+
+	declare Real Team1_TotalTime = 0.0;
+	declare Real Team2_TotalTime = 0.0;
+
+	foreach (Score in PrevRaceRanking) {
+		if (!GetFinishedRace(Score)) {
+			if (Score.TeamNum == 1) {
+				Team1_DNFPlayers += 1;
+			} else {
+				Team2_DNFPlayers += 1;
+			}
+		} else {
+			if (Score.TeamNum == 1) {
+				Team1_TotalTime += Score.PrevRaceTimes[0];
+			} else {
+				Team2_TotalTime += Score.PrevRaceTimes[0];
+			}
+		}
+	}
+
+	declare Real TotalDelta = Team2_TotalTime - Team1_TotalTime;
+
+	TotalDelta = TotalDelta / 1000;
+
+	TotalDelta += Team1_DNFPlayers * S_DNFPenalty;
+	TotalDelta -= Team2_DNFPlayers * S_DNFPenalty;
+
+	declare Real TotalAbsoluteDelta = TotalDelta;
+
+	if (TotalAbsoluteDelta < 0) {
+		TotalAbsoluteDelta = TotalAbsoluteDelta * -1;
+	}
+
+	declare netwrite Real Map_Delta for Teams[0];
+	Map_Delta = TotalDelta;
+
+	declare netwrite Integer DeltaVersion for Teams[0];
+	DeltaVersion = LatestDeltaVersion + 1;
+	LatestDeltaVersion += 1;
+
+	declare Boolean WinnerFound = False;
+
+	if (TotalAbsoluteDelta > S_MaxTimeDelta && PreviousDelta > S_MaxTimeDelta && ((TotalDelta > 0 && Map_TimeDelta > 0) || (TotalDelta < 0 && Map_TimeDelta < 0))) {
+		WinnerFound = True;
+		if (TotalDelta < 0) {
+			Team1_MapWins += 1;
+		} else {
+			Team2_MapWins += 1;
+		}
+	}
+
+	Map_TimeDelta = TotalDelta;
+
+	if (WinnerFound) {
+		MB_StopMap();
+	}
+	
+
+	// // Get the last round points
+	// TeamsCommonLib::ComputeLatestRaceScores(S_UseCustomPointsRepartition, S_CumulatePoints, S_UseAlternateRules, S_MaxPointsPerRound);
+	// Race::SortScores(Race::C_Sort_TotalPoints);
+	// UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::ForcedVisible;
+	// UIManager.UIAll.UISequence = CUIConfig::EUISequence::EndRound;
+	// MB_Sleep(3000);
+	// // Add them to the total scores
+	// TeamsCommonLib::ComputeScores();
+	// Race::SortScores(Race::C_Sort_TotalPoints);
+	// MB_Sleep(3000);
+	// UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
+	// UIManager.UIAll.UISequence = CUIConfig::EUISequence::Playing;
+
+	// TeamsCommonLib::UpdateScoresTableFooter(0, 0, S_RoundsPerMap, S_MapsPerMatch, Map_ValidRoundsNb, MB_GetMapCount());
+
+	// if (TeamsCommonLib::MapIsOver(Map_ValidRoundsNb, S_PointsGap, S_UseTieBreak, S_PointsLimit, S_RoundsPerMap)) {
+	// 	MB_StopMap();
+	// }
+}
+***
+
+***Match_EndMap***
+***
+// if (TeamsCommonLib::MatchIsOver(S_PointsGap, S_UseTieBreak, S_PointsLimit, S_MapsPerMatch, MB_GetMapCount(), S_RoundsPerMap)) {
+	MB_StopMatch();
+// }
+
+// Ranking
+declare WinningTeam = -1;
+if (Team1_MapWins > Team2_MapWins) {
+	WinningTeam = 1;
+} else {
+	WinningTeam = 2;
+}
+Scores::SetClanWinner(WinningTeam);
+
+
+// Set scores table for podium
+UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_BestTime);
+UIModules_ScoresTable::DisplayRoundPoints(False);
+Race::SortScores(Race::C_Sort_TotalPoints);
+
+if (!MB_MatchIsRunning()) {
+	foreach (Player in Players) {
+		if (Player.User != Null) {
+			if (Player.CurrentClan == 1 || Player.CurrentClan == 2) {
+				if (Player.CurrentClan == WinningTeam) {
+					Tracking::SendPlayerMatchResult(UIManager, Player, 1, True);
+				} else {
+					Tracking::SendPlayerMatchResult(UIManager, Player, 2, False);
+				}
+			}
+		}
+	}
+}
+
+if (!MB_MapIsRunning() && MB_MatchIsRunning()) MB_SkipPodiumSequence();
+***
+
+***Match_BeforeCloseLadder***
+***
+// Sort players by team for the ladder ranking
+declare ClanWinner = Scores::GetClanWinner();
+foreach (Score in Scores) {
+	declare Team_PrevMapPoints for Score = 0;
+	Team_PrevMapPoints = Scores::GetPlayerMapPoints(Score);
+
+	if (ClanWinner == 1 || ClanWinner == 2) {
+		if (Score.TeamNum == ClanWinner) {
+			Scores::SetPlayerMapPoints(Score, 2);
+		} else if (Score.TeamNum == 3 - ClanWinner) {
+			Scores::SetPlayerMapPoints(Score, 1);
+		} else {
+			Scores::SetPlayerMapPoints(Score, 0);
+		}
+	} else {
+		if (Score.TeamNum == 1 || Score.TeamNum == 2) {
+			Scores::SetPlayerMapPoints(Score, 1);
+		} else {
+			Scores::SetPlayerMapPoints(Score, 0);
+		}
+	}
+}
+***
+
+***Match_AfterCloseLadder***
+***
+foreach (Score in Scores) {
+	declare Team_PrevMapPoints for Score = 0;
+	Scores::SetPlayerMapPoints(Score, Team_PrevMapPoints);
+}
+***
+
+***Match_BeforePodiumSequence***
+***
+TeamsCommonLib::BeforePodiumSequence(Scores::GetClanWinner());
+***
+
+***Match_AfterPodiumSequence***
+***
+TeamsCommonLib::AfterPodiumSequence();
+***
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Functions
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+/** Whether the player finished the race or not
+ *
+ *	@param	_Score								Player's score
+ *	@param	_HasFinished					True if player finished race
+ */
+ Void SetFinishedRace(CSmScore _Score, Boolean _HasFinished) {
+	declare Knockout_FinishedRace for _Score = False;
+	Knockout_FinishedRace = _HasFinished;
+}
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+/** Whether the player finished the race or not
+ *
+ *	@param	_Score								Player's score
+ *	@return												True if player finished race
+ */
+Boolean GetFinishedRace(CSmScore _Score) {
+	declare Knockout_FinishedRace for _Score = False;
+	return Knockout_FinishedRace;
+}
+
+
+
+Void LoadUI() {
+	declare Text MLText = """
+ <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+ <manialink version="3" name="TugOfWar">
+  <frame id="frame-global" hidden="0">
+	 <frame id="frame-matchinfo" pos="-30 90" hidden="0">
+		 <quad id="quad-delta-display" size="60 20" bgcolor="000000" opacity="1"/>
+		 <label id="label-matchinfo-info" pos="3 -8.8" size="49 8" textsize="3.5" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="ffffff" text="HELLO" />
+	 </frame>
+ </frame>
+ <script><!--
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // MARK: Libraries
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ #Include "TextLib" as TL
+ #Include "MathLib" as ML
+ #Include "ColorLib" as CL
+ #Include "Libs/Nadeo/CMGame/Utils/Icons.Script.txt" as Icons
+ #Include "Libs/Nadeo/CMGame/Utils/Tools.Script.txt" as Tools
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+
+Void UpdateLabel() {
+	declare netread Real Map_Delta for Teams[0];
+	declare CMlFrame Frame <=> (Page.GetFirstChild("frame-global") as CMlFrame);
+	declare CMlQuad Quad_ToggleButton <=> (Frame.GetFirstChild("quad-delta-display") as CMlQuad);
+	declare CMlLabel Label_Info <=> (Frame.GetFirstChild("label-matchinfo-info") as CMlLabel);
+	if (Map_Delta > 0.0) {
+		Quad_ToggleButton.BgColor = CL::HexToRgb("FF0000");
+	} else if (Map_Delta == 0.0) {
+		Quad_ToggleButton.BgColor = CL::HexToRgb("000000");
+	} else {
+		Quad_ToggleButton.BgColor = CL::HexToRgb("0000FF");
+	}
+
+	declare Real AbsMapDelta = Map_Delta;
+
+	if (AbsMapDelta < 0) {
+		AbsMapDelta = AbsMapDelta * -1;
+	}
+
+	Label_Info.Value = "" ^ (AbsMapDelta);
+}
+
+main() {
+
+	declare Integer LatestDeltaVersion = 0;
+
+	while (True) {
+		yield;
+		declare netread Integer DeltaVersion for Teams[0];
+		if (LatestDeltaVersion != DeltaVersion) {
+			UpdateLabel();
+			LatestDeltaVersion = DeltaVersion;
+		}
+	}
+	
+}
+
+--></script>
+ </manialink>
+""";
+	Layers::Create(C_MlId_LiveRanking, MLText);
+	Layers::SetType(C_MlId_LiveRanking, CUILayer::EUILayerType::Normal);
+	Layers::Attach(C_MlId_LiveRanking);
+}
