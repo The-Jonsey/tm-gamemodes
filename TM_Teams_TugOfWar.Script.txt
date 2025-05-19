@@ -26,7 +26,7 @@
 #Setting S_FinishTimeout 15 as _("Finish timeout")
 #Setting S_RoundsPerMap -1 as _("Number of rounds per track :") ///< Number of round to play on one map before going to the next one
 #Setting S_MapsPerMatch 1 as _("Number of tracks per match :") ///< Number of maps to play before finishing the matchn
-#Setting S_WarmUpNb 0 as _("Number of warm up :")
+#Setting S_WarmUpNb 1 as _("Number of warm up :")
 #Setting S_WarmUpDuration 0 as _("Duration of one warm up :")
 #Setting S_WarmUpTimeout -1 as _("Warm up timeout")
 #Setting S_MaxTimeDelta 5.0 as _("Max limit for time delta to go either way, like a point limit in Cup mode")
@@ -94,7 +94,7 @@ if (C_HudModulePath != "") Hud_Load(C_HudModulePath);
 ***Match_AfterLoadHud***
 ***
 ClientManiaAppUrl = C_ManiaAppUrl;
-Race::SortScores(Race::C_Sort_TotalPoints);
+Race::SortScores(Race::C_Sort_BestRaceTime);
 UIModules_Checkpoint::SetVisibilityTimeDiff(False);
 UIModules_Checkpoint::SetRankMode(UIModules_Checkpoint::C_RankMode_CurrentRace);
 UIModules_Sign16x9Small::SetScoreMode(UIModules_Sign16x9Small::C_ScoreMode_Points);
@@ -194,7 +194,7 @@ CarRank::Reset();
 
 Match_MapsCount += 1;
 
-UIModules_ScoresTable::SetFooterInfo(_("Warm up"));
+UIModules_ScoresTable::SetInfoMessage(_("Warm up"));
 MB_WarmUp(S_WarmUpNb, S_WarmUpDuration * 1000, S_WarmUpTimeout * 1000);
 
 declare Text MaxRoundsText = S_MaxRounds ^ "";
@@ -203,7 +203,8 @@ if (S_MaxRounds <= 0) {
 	MaxRoundsText = "Unlimited";
 }
 
-UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch ^ "\nMax Time Delta: " ^ S_MaxTimeDelta));
+UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 ***
 
 ***Match_StartRound***
@@ -216,7 +217,8 @@ if (S_MaxRounds <= 0) {
 }
 
 
-UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch ^ "\nMax Time Delta: " ^ S_MaxTimeDelta));
+UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 
 StateMgr::ForcePlayersStates([StateMgr::C_State_Playing]);
 ***
@@ -238,11 +240,12 @@ foreach (Event in RacePendingEvents) {
 		CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
 		if (Event.Player != Null) {
 			if (Event.IsEndRace) {
-				// declare BetterRace = Scores::UpdatePlayerBestRaceIfBetter(Event.Player);
-				// declare BetterLap = Scores::UpdatePlayerBestLapIfBetter(Event.Player);
+				Scores::UpdatePlayerPrevRace(Event.Player);
+				Scores::UpdatePlayerBestRaceIfBetter(Event.Player);
+				Scores::UpdatePlayerBestLapIfBetter(Event.Player);
 				Scores::UpdatePlayerPrevRace(Event.Player);
 				// TeamsCommonLib::ComputeLatestRaceScores(S_UseCustomPointsRepartition, S_CumulatePoints, S_UseAlternateRules, S_MaxPointsPerRound);
-				Race::SortScores(Race::C_Sort_TotalPoints);
+				Race::SortScores(Race::C_Sort_BestRaceTime);
 
 				// Start the countdown if it's the first player to finish
 				if (EndTime <= 0) {
@@ -303,6 +306,9 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 	declare Integer Team1_DNFPlayers = 0;
 	declare Integer Team2_DNFPlayers = 0;
 
+	declare Integer Team1Players = 0;
+	declare Integer Team2Players = 0;
+
 	declare Real Team1_TotalTime = 0.0;
 	declare Real Team2_TotalTime = 0.0;
 
@@ -313,8 +319,10 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 	foreach (Score in PrevRaceRanking) {
 		if (!GetFinishedRace(Score)) {
 			if (Score.TeamNum == 1) {
+				Team1Players += 1;
 				Team1_DNFPlayers += 1;
 			} else {
+				Team2Players += 1;
 				Team2_DNFPlayers += 1;
 			}
 		} else {
@@ -324,15 +332,35 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 				FastestTimeSet = True;
 			}
 			if (Score.TeamNum == 1) {
+				Team1Players += 1;
 				Team1_TotalTime += (Scores::GetPlayerPrevRaceTime(Score) / 1000.0);
 			} else {
+				Team2Players += 1;
 				Team2_TotalTime += (Scores::GetPlayerPrevRaceTime(Score) / 1000.0);
 			}
 		}
 	}
 
-	Team1_TotalTime += Team1_DNFPlayers * (FastestTime + S_FinishTimeout);
-	Team2_TotalTime += Team2_DNFPlayers * (FastestTime + S_FinishTimeout);
+	declare Integer FinishTimeout = GetFinishTimeout();
+
+	Team1_TotalTime += Team1_DNFPlayers * (FastestTime + FinishTimeout);
+	Team2_TotalTime += Team2_DNFPlayers * (FastestTime + FinishTimeout);
+
+	if (Team1_TotalTime == 0.0) {
+		Team1_TotalTime = FastestTime + FinishTimeout;
+	}
+
+	if (Team2_TotalTime == 0.0) {
+		Team2_TotalTime = FastestTime + FinishTimeout;
+	}
+
+	if (Team1Players != Team2Players) {
+		if (Team1Players < Team2Players) {
+			Team2_TotalTime = (Team2_TotalTime / Team2Players) * Team2Players;
+		} else {
+			Team1_TotalTime = (Team1_TotalTime / Team1Players) * Team1Players;
+		}
+	}
 
 	declare Real TotalDelta = Team1_TotalTime - Team2_TotalTime;
 
@@ -346,13 +374,15 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 		}
 	}
 
-	declare Real TotalAbsoluteDelta = ML::Abs(TotalDelta + Map_TimeDelta);
 
 	declare Real PreviousAbsoluteDelta = ML::Abs(PreviousDelta);
 
 	declare Boolean WinnerFound = False;
 
-	if (TotalAbsoluteDelta >= S_MaxTimeDelta && PreviousAbsoluteDelta >= S_MaxTimeDelta && ((TotalDelta > 0 && PreviousDelta > 0) || (TotalDelta < 0 && PreviousDelta < 0))) {
+
+	Map_TimeDelta += TotalDelta;
+
+	if (ML::Abs(Map_TimeDelta) >= S_MaxTimeDelta && PreviousAbsoluteDelta >= S_MaxTimeDelta && TeamAhead(Map_TimeDelta) == TeamAhead(PreviousDelta)) {
 		WinnerFound = True;
 		if (TotalDelta < 0) {
 			Team1_MapWins += 1;
@@ -367,9 +397,6 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 			Team2_MapWins += 1;
 		}
 	}
-
-
-	Map_TimeDelta += TotalDelta;
 
 	// Map_TimeDelta = ML::Rand(-5000, 5000) / 1000.0;
 
@@ -392,7 +419,8 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 		if (S_MaxRounds <= 0) {
 			MaxRoundsText = "Unlimited";
 		}
-		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch ^ "\nMax Time Delta: " ^ S_MaxTimeDelta));
+		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+		UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 		declare netwrite Integer RedMapWins for Teams[0];
 		RedMapWins = Team2_MapWins;
 		declare netwrite Integer BlueMapWins for Teams[0];
@@ -407,7 +435,8 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 		}
 	
 	
-		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch ^ "\nMax Time Delta: " ^ S_MaxTimeDelta));
+		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+		UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 		MB_Sleep(S_ChatTime / 2 * 1000);
 		UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
 	}
@@ -430,6 +459,19 @@ LatestDeltaVersion = 0;
 
 Map_Delta = 0.0;
 
+Race::SortScores(Race::C_Sort_BestRaceTime);
+
+declare Integer MapWinner = TeamAhead(Map_TimeDelta);
+
+foreach(Score in Scores) {
+	if (Score.TeamNum == MapWinner) {
+		Scores::AddPlayerMatchPoints(Score, 1);
+		break;
+	} else {
+		continue;
+	}
+}
+
 
 declare Integer MinMapWins = ML::CeilingInteger(S_MapsPerMatch / 2.0);
 
@@ -448,7 +490,7 @@ if (Team1_MapWins >= MinMapWins || Team2_MapWins >= MinMapWins) {
 
 	UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_BestTime);
 	UIModules_ScoresTable::DisplayRoundPoints(False);
-	// Race::SortScores(Race::C_Mode_BestTime);
+	Race::SortScores(Race::C_Sort_BestRaceTime);
 
 // Set scores table for podium
 } else {
@@ -463,49 +505,27 @@ if (!MB_MapIsRunning() && MB_MatchIsRunning()) MB_SkipPodiumSequence();
 Log::Log("Match Over GG", 5500);
 ***
 
-// ***Match_BeforeCloseLadder***
-// ***
-// // Sort players by team for the ladder ranking
-// declare ClanWinner = Scores::GetClanWinner();
-// foreach (Score in Scores) {
-// 	declare Team_PrevMapPoints for Score = 0;
-// 	Team_PrevMapPoints = Scores::GetPlayerMapPoints(Score);
+***Match_BeforePodiumSequence***
+***
+TeamsCommonLib::BeforePodiumSequence(Scores::GetClanWinner());
+***
 
-// 	if (ClanWinner == 1 || ClanWinner == 2) {
-// 		if (Score.TeamNum == ClanWinner) {
-// 			Scores::SetPlayerMapPoints(Score, 2);
-// 		} else if (Score.TeamNum == 3 - ClanWinner) {
-// 			Scores::SetPlayerMapPoints(Score, 1);
-// 		} else {
-// 			Scores::SetPlayerMapPoints(Score, 0);
-// 		}
-// 	} else {
-// 		if (Score.TeamNum == 1 || Score.TeamNum == 2) {
-// 			Scores::SetPlayerMapPoints(Score, 1);
-// 		} else {
-// 			Scores::SetPlayerMapPoints(Score, 0);
-// 		}
-// 	}
-// }
-// ***
+***Match_PodiumSequence***
+***
+if (MB_MatchIsRunning()) {
+	MB_Sleep(2000);
+} else {
+	ModeUtils::PushAndApplyUISequence(UIManager.UIAll, CUIConfig::EUISequence::Podium);
+	MB_Sleep(S_ChatTime * 1000);
+	ModeUtils::PopAndApplyUISequence(UIManager.UIAll);
+}
 
-// ***Match_AfterCloseLadder***
-// ***
-// foreach (Score in Scores) {
-// 	declare Team_PrevMapPoints for Score = 0;
-// 	Scores::SetPlayerMapPoints(Score, Team_PrevMapPoints);
-// }
-// ***
+***
 
-// ***Match_BeforePodiumSequence***
-// ***
-// TeamsCommonLib::BeforePodiumSequence(Scores::GetClanWinner());
-// ***
-
-// ***Match_AfterPodiumSequence***
-// ***
-// TeamsCommonLib::AfterPodiumSequence();
-// ***
+***Match_AfterPodiumSequence***
+***
+TeamsCommonLib::AfterPodiumSequence();
+***
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Functions
@@ -533,6 +553,32 @@ Boolean GetFinishedRace(CSmScore _Score) {
 	return Knockout_FinishedRace;
 }
 
+Integer GetFinishTimeout() {
+	declare FinishTimeout = 0;
+
+	if (S_FinishTimeout >= 0) {
+			FinishTimeout = S_FinishTimeout * 1000;
+	} else {
+			FinishTimeout = 5000;
+			if (Map.TMObjective_IsLapRace && Race::GetLapsNb() > 0 && Map.TMObjective_NbLaps > 0) {
+					FinishTimeout += ((Map.TMObjective_AuthorTime / Map.TMObjective_NbLaps) * Race::GetLapsNb()) / 6;
+			} else {
+					FinishTimeout += Map.TMObjective_AuthorTime / 6;
+			}
+	}
+
+	return FinishTimeout / 1000;
+}
+
+Integer TeamAhead(Real _Time) {
+	if (_Time < 0.0) {
+		return 1;
+	} else if (Time > 0.0) {
+		return 2;
+	} else {
+		return 0;
+	}
+}
 
 
 Void LoadUI() {
@@ -568,6 +614,7 @@ Void LoadUI() {
  #Include "ColorLib" as CL
  #Include "Libs/Nadeo/CMGame/Utils/Icons.Script.txt" as Icons
  #Include "Libs/Nadeo/CMGame/Utils/Tools.Script.txt" as Tools
+ #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/WarmupHelpers_Client.Script.txt" as WarmupHelpers
 
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
@@ -676,10 +723,16 @@ Void LoadUI() {
 Void UpdateLabel(Real _Map_Delta) {
 	declare CMlFrame Frame <=> (Page.GetFirstChild("frame-global") as CMlFrame);
 	declare CMlLabel Label_Info <=> (Frame.GetFirstChild("label-matchinfo-info") as CMlLabel);
+	if (WarmupHelpers::IsWarmupActive(Teams[0])) {
+		Label_Info.TextColor = CL::HexToRgb("FFA500");
+		Label_Info.Value = "Warmup";
 
-	declare Real AbsMapDelta = ML::Abs(_Map_Delta);
+	} else {
+		Label_Info.TextColor = CL::HexToRgb("FFFFFF");
+		declare Real AbsMapDelta = ML::Abs(_Map_Delta);
 
-	Label_Info.Value = "" ^ (ML::ToReal(ML::NearestInteger(AbsMapDelta * 1000)) / 1000.0);
+		Label_Info.Value = "" ^ (ML::ToReal(ML::NearestInteger(AbsMapDelta * 1000)) / 1000.0);
+	}
 }
 
 Void UpdateCautionLabel(Real _Map_Delta, Real _MaxTimeDelta) {
