@@ -343,6 +343,8 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 
 	declare Integer FinishTimeout = GetFinishTimeout();
 
+	UIModules_BigMessage::SetMessage("Finish Timeout " ^ FinishTimeout, 2000);
+
 	Team1_TotalTime += Team1_DNFPlayers * (FastestTime + FinishTimeout);
 	Team2_TotalTime += Team2_DNFPlayers * (FastestTime + FinishTimeout);
 
@@ -356,9 +358,9 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 
 	if (Team1Players != Team2Players) {
 		if (Team1Players < Team2Players) {
-			Team2_TotalTime = (Team2_TotalTime / Team2Players) * Team2Players;
+			Team2_TotalTime = (Team2_TotalTime / Team2Players) * Team1Players;
 		} else {
-			Team1_TotalTime = (Team1_TotalTime / Team1Players) * Team1Players;
+			Team1_TotalTime = (Team1_TotalTime / Team1Players) * Team2Players;
 		}
 	}
 
@@ -573,11 +575,12 @@ Integer GetFinishTimeout() {
 Integer TeamAhead(Real _Time) {
 	if (_Time < 0.0) {
 		return 1;
-	} else if (Time > 0.0) {
+	} else if (_Time > 0.0) {
 		return 2;
 	} else {
 		return 0;
 	}
+	return 0;
 }
 
 
