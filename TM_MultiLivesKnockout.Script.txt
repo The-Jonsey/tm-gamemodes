@@ -47,7 +47,7 @@
  #Setting S_DoRestoreLife False
  #Setting S_DoRestoreLifeGoldenRound False
  #Setting S_LifeRestorationThreshold 0
- 
+ #Setting S_ScriptEnvironment "development"
  
  /* About S_EliminatedPlayersNbRanks.
   * If S_EliminationMode is 2, it will decrease the number of lose of life.
@@ -91,6 +91,7 @@
  #Const C_Callback_LostLife "Trackmania.Knockout.LostLife"
  
  #Const C_MlId_LiveRanking "MultiLivesKnockout.LiveRanking"
+
  
  
  // [Knockout] Time remaining before the first round begins (in seconds). %1 is a marker to apply typography. %2 is a digit. e.g. "Next round in 3s"
@@ -261,7 +262,14 @@
  ***
  declare Integer Match_CurrentRoundNb;
  declare Boolean Match_RegistrationIsOpen;
- 
+ declare Boolean NextRoundLifeGain;
+ declare Boolean CurrentRoundLifeGain;
+ declare Text[] AdminAccountIds = [
+	"7a170f66-1ff1-49f6-94e5-9d492dccc412", // JonseyTM
+	"05477e79-25fd-48c2-84c7-e1621aa46517" // GranaDy.
+ ];
+ declare netwrite Text[] Net_AdminAccountIds for Teams[0];
+ Net_AdminAccountIds = AdminAccountIds;
  ***
  
  ***Match_StartMatch***
@@ -282,7 +290,7 @@
  
  ***Match_InitMap***
  ***
- UpdateMatchInfos(Match_CurrentRoundNb);
+ UpdateMatchInfos(Match_CurrentRoundNb, CurrentRoundLifeGain);
  UpdateCustomRanking(False);
  UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
  ***
@@ -296,13 +304,13 @@
  
  // Warm up
  if (S_WarmUpNb > 0) {
-	 UpdateInterfacesInfo(-1);
+	 UpdateInterfacesInfo(-1, CurrentRoundLifeGain);
 	 foreach (Score in Scores) {
 		 WarmUp::CanPlay(Score, (Match_RegistrationIsOpen || ScoreIsAlive(Score)));
 	 }
  
 	 MB_WarmUp(S_WarmUpNb, S_WarmUpDuration * 1000, S_WarmUpTimeout * 1000);
-	 UpdateInterfacesInfo(Match_CurrentRoundNb);
+	 UpdateInterfacesInfo(Match_CurrentRoundNb, CurrentRoundLifeGain);
  }
  
  UpdateCustomRanking(False);
@@ -312,6 +320,11 @@
  ***
  declare Integer Round_LossOfLifeNb;
  declare Boolean Round_NeedInfoDisplayUpdate;
+
+ CurrentRoundLifeGain = NextRoundLifeGain;
+ NextRoundLifeGain = False;
+ declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
+ Net_NextRoundLifeGain = False;
  ***
  
  ***Rounds_CanSpawn***
@@ -335,14 +348,14 @@
 	 ]);
  }
  
- UpdateInterfacesInfo(Match_CurrentRoundNb, Round_LossOfLifeNb, AliveScoresNb);
+ UpdateInterfacesInfo(Match_CurrentRoundNb, Round_LossOfLifeNb, AliveScoresNb, CurrentRoundLifeGain);
  
  declare Text ObjectiveMessage = "";
  if (Round_LossOfLifeNb == 0) {
 	  //L16N [Knockout] Announce the number of players that will be eliminated at the end of the round. %1 will be replaced by a marker for Typography
 	  ObjectiveMessage = TL::Compose("%1No loss of life this round", "$t$i$fff");
  } else {
-	if (IsRestoreLifeRound(Match_CurrentRoundNb)) {
+	if (IsRestoreLifeRound(Match_CurrentRoundNb, CurrentRoundLifeGain)) {
 		 if (Round_LossOfLifeNb == 1){
 		 	//L16N [Knockout] Announce the number of players that will be eliminated at the end of the round. %1 will be replaced by the digit 1. eg: "1 player will be eliminated".
 		 	ObjectiveMessage = TL::Compose("%1 player will lose a life and 1 player will gain a life", "$t$i$fff"^TL::ToText(Round_LossOfLifeNb));
@@ -392,7 +405,7 @@
  UpdateLiveRanking();
  DisplayLiveRanking(True);
  UpdateCustomRanking(True);
- UpdateInterfacesInfo(Match_CurrentRoundNb);
+ UpdateInterfacesInfo(Match_CurrentRoundNb, CurrentRoundLifeGain);
  Round_NeedInfoDisplayUpdate = False;
  
  StateMgr::ForcePlayersStates([StateMgr::C_State_Playing]);
@@ -425,7 +438,7 @@
  }
  if (Round_NeedInfoDisplayUpdate) {
 	 UpdateCustomRanking(True);
-	 UpdateInterfacesInfo(Match_CurrentRoundNb);
+	 UpdateInterfacesInfo(Match_CurrentRoundNb, CurrentRoundLifeGain);
 	 Round_NeedInfoDisplayUpdate = False;
  }
  ***
@@ -469,6 +482,16 @@
 		 }
 	 }
  }
+
+ foreach (Event in UIManager.PendingEvents) {
+	if (Event.CustomEventType == "NextRoundLifeGainEvent") {
+		if (AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
+			NextRoundLifeGain = !NextRoundLifeGain;
+			declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
+			Net_NextRoundLifeGain = NextRoundLifeGain;
+		}
+	}
+ }
  
  // Manage mode events
  foreach (Event in PendingEvents) {
@@ -479,6 +502,7 @@
  
  ***Match_EndRound***
  ***
+ Log::Log("Test");
  Race::StopSkipOutroAll();
  EndTime = -1;
  StateMgr::ForcePlayersStates([StateMgr::C_State_Waiting]);
@@ -517,7 +541,7 @@
 		 declare Integer LossOfLifeNb = GetLossOfLifeNb(Match_CurrentRoundNb, AliveScoresNb);
 		 declare Integer Rank = AliveScoresNb;
  
-		 if (IsRestoreLifeRound(Match_CurrentRoundNb)) {
+		 if (IsRestoreLifeRound(Match_CurrentRoundNb, CurrentRoundLifeGain)) {
 			 //if (!S_DoRestoreLifeGoldenRound || (S_DoRestoreLifeGoldenRound) and MB_GetValidRoundCount() == S_RoundsPerMap) {
 				 foreach (Score in GetPrevRaceRanking()) {
 					 if (Score.User == Null) continue;
@@ -562,7 +586,7 @@
 	 +++Match_EndRound_AfterComputeScores+++
  
 	 UpdateCustomRanking(True);
-	 UpdateMatchInfos(Match_CurrentRoundNb);
+	 UpdateMatchInfos(Match_CurrentRoundNb, CurrentRoundLifeGain);
  
 	 // The UI display "no elimination during the FIRST round" when no elimination. So to prevent confusion, i disable it
 	 if (EliminatedAccountIds.count > 0) {
@@ -740,9 +764,9 @@
  }
 
 
- Boolean IsRestoreLifeRound(Integer _RoundNb) {
+ Boolean IsRestoreLifeRound(Integer _RoundNb, Boolean _CurrentRoundLifeGain) {
 	if (_RoundNb <= S_RoundsWithoutElimination) return False;
-	if (!S_DoRestoreLife) return False;
+	if (!S_DoRestoreLife && !_CurrentRoundLifeGain) return False;
 	if (S_LifeRestorationThreshold > 0 && GetAliveScoresNb() < S_LifeRestorationThreshold) return False;
 	if (S_DoRestoreLifeGoldenRound && MB_GetValidRoundCount() != S_RoundsPerMap) return False;
 	// if (WarmupHelpers::IsWarmupActive(Teams[0])) return False;
@@ -1044,7 +1068,7 @@
   *	@param	_AliveScoresNb							Number of Alive scores
   *	@param	_Milestone									Next Milestone
   */
- Void UpdateMatchInfos(Integer _CurrentRoundNb, Integer _LossOfLife, Integer _AliveScoresNb, Integer _Milestone) {
+ Void UpdateMatchInfos(Integer _CurrentRoundNb, Integer _LossOfLife, Integer _AliveScoresNb, Integer _Milestone, Boolean _CurrentRoundLifeGain) {
 	 declare Text MatchInfo = "";
 	 declare Text ScoreTablesInfo = "";
 	 if (MatchIsOver(_CurrentRoundNb)) {
@@ -1089,7 +1113,7 @@
 				ScoreTablesInfo ^= "\n1 player will lose a life";
 			}
    
-			if (IsRestoreLifeRound(_CurrentRoundNb)) {
+			if (IsRestoreLifeRound(_CurrentRoundNb, _CurrentRoundLifeGain)) {
 			   MatchInfo ^= "\n1 player will regain a life";
 			   ScoreTablesInfo ^= " and 1 player will regain";
 			}
@@ -1105,9 +1129,9 @@
 	 UpdateLiveRankingInfo();
  }
  
- Void UpdateMatchInfos(Integer _CurrentRoundNb) {
+ Void UpdateMatchInfos(Integer _CurrentRoundNb, Boolean _CurrentRoundLifeGain) {
 	 declare Integer AliveScoresNb = GetAliveScoresNb();
-	 UpdateMatchInfos(_CurrentRoundNb, GetLossOfLifeNb(_CurrentRoundNb, AliveScoresNb), AliveScoresNb, GetNextMilestone(_CurrentRoundNb, AliveScoresNb));
+	 UpdateMatchInfos(_CurrentRoundNb, GetLossOfLifeNb(_CurrentRoundNb, AliveScoresNb), AliveScoresNb, GetNextMilestone(_CurrentRoundNb, AliveScoresNb), _CurrentRoundLifeGain);
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1148,8 +1172,8 @@
   *	@param	_LossOfLife										Number of loss of life
   *	@param	_AliveScoresNb								Number of Alive scores
   */
- Void UpdateInterfacesInfo(Integer _CurrentRoundNb, Integer _LossOfLife, Integer _AliveScoresNb) {
-	 UpdateMatchInfos(_CurrentRoundNb, _LossOfLife, _AliveScoresNb, GetNextMilestone(_CurrentRoundNb, _AliveScoresNb));
+ Void UpdateInterfacesInfo(Integer _CurrentRoundNb, Integer _LossOfLife, Integer _AliveScoresNb, Boolean _CurrentRoundLifeGain) {
+	 UpdateMatchInfos(_CurrentRoundNb, _LossOfLife, _AliveScoresNb, GetNextMilestone(_CurrentRoundNb, _AliveScoresNb), _CurrentRoundLifeGain);
 	 UpdateMatchInfosPosition();
 	 UpdateMatchName();
 	 UpdateMaximumLives();
@@ -1157,9 +1181,9 @@
  
 	 UpdateLiveRankingInfo();
  }
- Void UpdateInterfacesInfo(Integer _CurrentRoundNb) {
+ Void UpdateInterfacesInfo(Integer _CurrentRoundNb, Boolean _CurrentRoundLifeGain) {
 	 declare Integer AliveScoresNb = GetAliveScoresNb();
-	 UpdateInterfacesInfo(_CurrentRoundNb, GetLossOfLifeNb(_CurrentRoundNb, AliveScoresNb), AliveScoresNb);
+	 UpdateInterfacesInfo(_CurrentRoundNb, GetLossOfLifeNb(_CurrentRoundNb, AliveScoresNb), AliveScoresNb, _CurrentRoundLifeGain);
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1206,13 +1230,19 @@
 			 </frame>
 		 </frame>
 	 </frame>
- </frame>
+ </frame>s
+ 	 <frame id="frame-next-round-life-gain" pos="140 -80" size="20 10" hidden="1">
+		<quad id="quad-next-round-life-gain" size="20 10" bgcolor="ff0000" scriptevents="1"/>
+		<label scriptevents="1" id="label-next-round-life-gain" pos="10 -2.5" size="20 15" halign="center" valign="center" textcolor="ffffff" textsize="2" textfont="GameFontSemiBold" text="Next Round Gain
+Disabled"/>
+	 </frame>
  <script><!--
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  // MARK: Libraries
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  #Include "TextLib" as TL
  #Include "MathLib" as ML
+ #Include "ColorLib" as CL
  #Include "Libs/Nadeo/CMGame/Utils/Icons.Script.txt" as Icons
  #Include "Libs/Nadeo/CMGame/Utils/Tools.Script.txt" as Tools
  #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/WarmupHelpers_Client.Script.txt" as WarmupHelpers
@@ -1618,10 +1648,18 @@
 	 log("Init "^ ScriptName ^" v"^ Version);
 	 declare CMlFrame Frame_Global <=> (Page.GetFirstChild("frame-global") as CMlFrame);
 	 declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
+	 declare CMlFrame Frame_LifeGain <=> (Page.GetFirstChild("frame-next-round-life-gain") as CMlFrame);
  
 	 wait (InputPlayer != Null);
+
 	 Frame_Global.Visible = True;
+
+	declare netread Text[] Net_AdminAccountIds for Teams[0];
  
+	 if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+	 	 Frame_LifeGain.Visible = True;
+	 }
+
 	 declare netread Boolean Net_MultiLivesKnockout_LiveRanking_Display for Teams[0] = False;
  
 	 declare persistent Boolean MultiLivesKnockout_LiveRanking_IsVisible for InputPlayer.User = True;
@@ -1656,7 +1694,22 @@
 			 Last_LiveRanking_Serial = Net_MultiLivesKnockout_LiveRanking_Serial;
 			 UpdateLiveRanking = True;
 		 }
- 
+
+		declare netread Boolean Net_NextRoundLifeGain for Teams[0];
+
+		//next-round-life-gain
+		declare CMlFrame Frame_NRLG <=> (Page.GetFirstChild("frame-next-round-life-gain") as CMlFrame);
+		declare CMlQuad Quad_NRLG <=> (Frame_NRLG.GetFirstChild("quad-next-round-life-gain") as CMlQuad);
+		declare CMlLabel Label_NRLG <=> (Frame_NRLG.GetFirstChild("label-next-round-life-gain") as CMlLabel);
+
+		if (Net_NextRoundLifeGain) {
+			Quad_NRLG.BgColor = CL::HexToRgb("00FF00");
+			Label_NRLG.Value = "Next Round Gain\nEnabled";
+		} else {
+			Quad_NRLG.BgColor = CL::HexToRgb("FF0000");
+			Label_NRLG.Value = "Next Round Gain\nDisabled";
+		}
+
 		 foreach (Event in PendingEvents) {
 			 switch (Event.Type) {
 				 case CMlScriptEvent::Type::MouseClick: {
@@ -1669,6 +1722,12 @@
 						 case "quad-liveranking-togglebutton": {
 							 MultiLivesKnockout_LiveRanking_IsVisible = !MultiLivesKnockout_LiveRanking_IsVisible;
 							 ToggleUI(MultiLivesKnockout_LiveRanking_IsVisible, True);
+						 }
+						 case "quad-next-round-life-gain": {
+						 	SendCustomEvent("NextRoundLifeGainEvent", []);
+						 }
+						 case "label-next-round-life-gain": {
+						 	SendCustomEvent("NextRoundLifeGainEvent", []);
 						 }
 					 }
 				 }
