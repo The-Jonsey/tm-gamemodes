@@ -19,13 +19,15 @@
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/Checkpoint_Server.Script.txt" as UIModules_Checkpoint
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/PauseMenuOnline_Server.Script.txt" as UIModules_PauseMenu_Online
 #Include "Libs/Nadeo/TMGame/Modes/Teams/TeamsCommon.Script.txt" as TeamsCommonLib
+#Include "Libs/Nadeo/Trackmania/Modes/TMWTCommon/Teams.Script.txt" as Teams
+#Include "Libs/Nadeo/TrackMania/Modes/Rounds/UIModules/SmallScoresTable_Server.Script.txt" as UIModules_RoundsSmallScoresTable
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Settings
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-#Setting S_FinishTimeout 15 as _("Finish timeout")
+#Setting S_FinishTimeout 15 as _("Finish timeout")z
 #Setting S_RoundsPerMap -1 as _("Number of rounds per track :") ///< Number of round to play on one map before going to the next one
-#Setting S_MapsPerMatch 1 as _("Number of tracks per match :") ///< Number of maps to play before finishing the matchn
+#Setting S_PointsLimit 1 as _("Number of map wins to win match :") ///< Number of maps to play before finishing the matchn
 #Setting S_WarmUpNb 1 as _("Number of warm up :")
 #Setting S_WarmUpDuration 0 as _("Duration of one warm up :")
 #Setting S_WarmUpTimeout -1 as _("Warm up timeout")
@@ -51,7 +53,7 @@
 #Const C_CelebrateRecordGhost False
 #Const C_CelebrateRecordMedal False
 
-#Const C_MlId_LiveRanking "Tig.LiveRanking"
+// #Const C_MlId_LiveRanking "Tig.LiveRanking"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Extends
@@ -98,10 +100,12 @@ Race::SortScores(Race::C_Sort_BestRaceTime);
 UIModules_Checkpoint::SetVisibilityTimeDiff(False);
 UIModules_Checkpoint::SetRankMode(UIModules_Checkpoint::C_RankMode_CurrentRace);
 UIModules_Sign16x9Small::SetScoreMode(UIModules_Sign16x9Small::C_ScoreMode_Points);
+UIModules_ScoresTable::SetHideSpectators(True);
 // Hide SM Overlay
 UIManager.UIAll.OverlayHideSpectatorInfos = True;
 UIManager.UIAll.OverlayHideCountdown = True;
 LoadUI();
+UIModules::UnloadModules([UIModules_RoundsSmallScoresTable::GetId()]);
 ***
 
 ***Match_Yield***
@@ -152,7 +156,7 @@ Race::SetupRecord(
 	C_CelebrateRecordMedal
 );
 Server_RoundsPerMap = S_RoundsPerMap - 1;
-Server_MapsPerMatch = S_MapsPerMatch - 1;
+Server_MapsPerMatch = S_PointsLimit - 1;
 ***
 
 ***Match_StartMatch***
@@ -170,6 +174,7 @@ RedMapWins = Team2_MapWins;
 declare netwrite Integer BlueMapWins for Teams[0];
 BlueMapWins = Team1_MapWins;
 
+UpdateLiveRankingInfo();
 
 ***
 
@@ -185,6 +190,10 @@ Scores::SetClanMapPoints(2, Scores::GetClanMatchPoints(2));
 declare Integer Map_ValidRoundsNb;
 
 declare Real Map_TimeDelta = 0.0;
+
+
+declare netwrite Integer FinishTimeout for Teams[0];
+FinishTimeout = GetFinishTimeout();
 ***
 
 ***Match_StartMap***
@@ -203,12 +212,15 @@ if (S_MaxRounds <= 0) {
 	MaxRoundsText = "Unlimited";
 }
 
-UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_PointsLimit));
 UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 ***
 
 ***Match_StartRound***
 ***
+	declare netwrite Real MaxTimeDelta for Teams[0];
+	MaxTimeDelta = S_MaxTimeDelta;
+UpdateLiveRankingInfo();
 
 declare Text MaxRoundsText = S_MaxRounds ^ "";
 
@@ -217,11 +229,23 @@ if (S_MaxRounds <= 0) {
 }
 
 
-UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_PointsLimit));
 UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 
 StateMgr::ForcePlayersStates([StateMgr::C_State_Playing]);
 ***
+
+***Rounds_CheckCanSpawn***
+***
+if (!Teams::CanPlay(_Player, False)) return False;
+***
+
+***Rounds_SpawnPlayer***
+***
+Teams::MovePlayerToRequestedClan(This, Player, False);
+Race::Start(Player, StartTime);
+***
+
 
 ***Rounds_PlayerSpawned***
 ***
@@ -237,6 +261,9 @@ foreach (Event in RacePendingEvents) {
 
 	// Waypoint
 	if (Event.Type == Events::C_Type_Waypoint) {
+		declare netwrite Integer FinishTimeout for Teams[0];
+		FinishTimeout = GetFinishTimeout();
+		UpdateLiveRankingInfo();
 		CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
 		if (Event.Player != Null) {
 			if (Event.IsEndRace) {
@@ -270,10 +297,10 @@ foreach (Event in PendingEvents) {
 // Server info change
 if (
 	Server_RoundsPerMap != S_RoundsPerMap ||
-	Server_MapsPerMatch != S_MapsPerMatch
+	Server_MapsPerMatch != S_PointsLimit
 ) {
 	Server_RoundsPerMap = S_RoundsPerMap;
-	Server_MapsPerMatch = S_MapsPerMatch;
+	Server_MapsPerMatch = S_PointsLimit;
 
 }
 ***
@@ -421,7 +448,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 		if (S_MaxRounds <= 0) {
 			MaxRoundsText = "Unlimited";
 		}
-		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_PointsLimit));
 		UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 		declare netwrite Integer RedMapWins for Teams[0];
 		RedMapWins = Team2_MapWins;
@@ -437,7 +464,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 		}
 	
 	
-		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_MapsPerMatch));
+		UIModules_ScoresTable::SetFooterInfo(TL::Compose("Round " ^ (Map_ValidRoundsNb + 1) ^ " / " ^ MaxRoundsText ^ " Map " ^ Match_MapsCount ^ " / " ^ S_PointsLimit));
 		UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_MaxTimeDelta ^ "  "));
 		MB_Sleep(S_ChatTime / 2 * 1000);
 		UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
@@ -475,9 +502,8 @@ foreach(Score in Scores) {
 }
 
 
-declare Integer MinMapWins = ML::CeilingInteger(S_MapsPerMatch / 2.0);
 
-if (Team1_MapWins >= MinMapWins || Team2_MapWins >= MinMapWins) {
+if (Team1_MapWins >= S_PointsLimit || Team2_MapWins >= S_PointsLimit) {
 	MB_StopMatch();
  
 
@@ -583,6 +609,13 @@ Integer TeamAhead(Real _Time) {
 	return 0;
 }
 
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ /// Update LiveRanking Info
+ Void UpdateLiveRankingInfo() {
+	declare netwrite Integer Net_LiveRanking_Serial for Teams[0];
+	Net_LiveRanking_Serial += 1;
+}
+
 
 Void LoadUI() {
 	declare Text MLText = """
@@ -607,6 +640,17 @@ Void LoadUI() {
 
 
 	 </frame>
+	 <frame id="frame-liveranking" pos="-160 30" size="65 90" hidden="1">
+		 <frame id="frame-liveranking-content">
+			 <quad id="quad-liveranking-background" size="55 12" bgcolor="000000" opacity="0.6"/>
+			 <label pos="27.5 -3" halign="center" textsize="2.5" textfont="GameFontExtraBold" textcolor="ffffff" text="LIVE RANKING"/>
+			 		<quad id="quad-live-blue" size="27.5 10" pos="0 -12" bgcolor="0000ff" opacity="0.5" hidden="0"/>
+		 			<quad id="quad-live-red" size="27.5 10" pos="55 -22" rot="180" bgcolor="ff0000" opacity="0.5" hidden="0" />
+			 <label id="label-live-delta" pos="27.5 -13" halign="center" textsize="5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
+ 			 <label id="label-blue-delta" pos="0 -17.5" halign="left" textsize="2.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
+ 			 <label id="label-red-delta" pos="55 -17.5" halign="right" textsize="2.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
+         </frame>
+	 </frame>
  </frame>
  <script><!--
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -618,12 +662,54 @@ Void LoadUI() {
  #Include "Libs/Nadeo/CMGame/Utils/Icons.Script.txt" as Icons
  #Include "Libs/Nadeo/CMGame/Utils/Tools.Script.txt" as Tools
  #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/WarmupHelpers_Client.Script.txt" as WarmupHelpers
+//  #Include "Libs/Nadeo/TMGame/Modes/Teams/TeamsCommon.Script.txt" as TeamsCommonLib
 
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 
 #Const BarTravelTime 250
+#Const ScriptName "TugOfWar"
+#Const C_LinesNb_Top 3
+
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // MARK: Structures
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ #Struct K_PlayerState {
+	 Ident ScoreId;
+	 Text Login;
+	 Text Name;
+	 Integer Rank;
+	 Integer CPNb;
+	 Integer LastCPTime;
+	 Integer RaceTime;
+	 Integer Delta;
+	 Boolean IsNotPlaying;
+	 Boolean Finished;
+	 Integer Clan;
+	 CScore Score;
+ }
+
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ /** Transform delta time to pretty value
+  *
+  *	@param	_Time													Display the UI or not
+  *	@return 															Human readable delta time
+  */
+ Text TimeToText(Integer _Time) {
+	 if (_Time < 1000) {
+		 return TL::FormatReal(_Time / 1000., 3, False, False);
+	 }
+ 
+	 declare TimeWithoutMs = _Time / 10;
+	 declare TimeInSeconds = TimeWithoutMs / 100.;
+	 if (TimeInSeconds <= 10.) {
+		 return TL::FormatReal(TimeInSeconds, 2, False, False);
+	 } else if (TimeInSeconds <= 100.) {
+		 return TL::FormatReal(TimeInSeconds, 1, False, False);
+	 }
+	 return TL::ToText(ML::FloorInteger(TimeInSeconds));
+ }
 
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -642,26 +728,31 @@ Void LoadUI() {
 	return CompletionPercentage;
 }
 
- Void UpdateQuads(Real _Map_Delta, Real _MaxTimeDelta) {
- 	declare CMlFrame Frame <=> (Page.GetFirstChild("frame-global") as CMlFrame);
- 	declare CMlQuad Quad_Red <=> (Frame.GetFirstChild("quad-red") as CMlQuad);
-	declare CMlQuad Quad_Blue <=> (Frame.GetFirstChild("quad-blue") as CMlQuad);
+ Void UpdateQuads(Real _Delta, Real _MaxTimeDelta, CMlFrame _Frame, Text _BlueQuadName, Text _RedQuadName, Real _MidBarSize, Integer _TravelTime) {
+  	declare CMlQuad Quad_Red <=> (_Frame.GetFirstChild(_RedQuadName) as CMlQuad);
+	declare CMlQuad Quad_Blue <=> (_Frame.GetFirstChild(_BlueQuadName) as CMlQuad);
 
-	declare Real CompletionPercentage = GetCompletionPercentage(_Map_Delta, _MaxTimeDelta);
+    declare Real CompletionPercentage = GetCompletionPercentage(_Delta, _MaxTimeDelta);
 
-	declare Real BarSize = (30.0 * CompletionPercentage) + 30.0;
+	declare Real BarSize = (_MidBarSize * CompletionPercentage) + _MidBarSize;
 
 	AnimMgr.Flush(Quad_Red);
 	AnimMgr.Flush(Quad_Blue);
 
 
-	if (_Map_Delta >= 0.0) {
-		AnimMgr.Add(Quad_Red, "<a size=\"" ^ BarSize ^" 20\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
-		AnimMgr.Add(Quad_Blue, "<a size=\"" ^ (60.0 - BarSize) ^" 20\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
+	if (_Delta >= 0.0) {
+		AnimMgr.Add(Quad_Red, "<a size=\"" ^ BarSize ^" " ^ Quad_Red.Size.Y  ^"\"/>", Now, _TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
+		AnimMgr.Add(Quad_Blue, "<a size=\"" ^ ((_MidBarSize * 2) - BarSize) ^" " ^ Quad_Blue.Size.Y  ^"\"/>", Now, _TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
 	} else {
-		AnimMgr.Add(Quad_Blue, "<a size=\"" ^ BarSize ^" 20\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
-		AnimMgr.Add(Quad_Red, "<a size=\"" ^ (60.0 - BarSize) ^" 20\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
+		AnimMgr.Add(Quad_Blue, "<a size=\"" ^ BarSize ^" " ^ Quad_Blue.Size.Y  ^"\"/>", Now, _TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
+		AnimMgr.Add(Quad_Red, "<a size=\"" ^ ((_MidBarSize * 2) - BarSize) ^" " ^ Quad_Red.Size.Y  ^"\"/>", Now, _TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
 	}
+  }
+
+ Void UpdateTopBar(Real _Map_Delta, Real _MaxTimeDelta) {
+ 	declare CMlFrame Frame <=> (Page.GetFirstChild("frame-global") as CMlFrame);
+
+	UpdateQuads(_Map_Delta, _MaxTimeDelta, Frame, "quad-blue", "quad-red", 30.0, 250);
   }
 
  Void UpdateProgressBar(Real _PrevValue, Real _Map_Delta, Real _MaxTimeDelta) {
@@ -698,25 +789,25 @@ Void LoadUI() {
 	if (LocalMapDelta < 0.0) {
 
 		if (LocalPrevValue >= 0.0) {
-			AnimMgr.Add(Quad_ProgressBar, "<a size=\"0 2\"/>", Now, BarTravelTime - Phase2TravelTime, CAnimManager::EAnimManagerEasing::Linear);
-			AnimMgr.AddChain(Quad_ProgressBar, "<a rot=\"180\" pos=\"30 -20\"/>", 1, CAnimManager::EAnimManagerEasing::Linear);
+			AnimMgr.Add(Quad_ProgressBar, "<a size=\"0 2\"/>", Now, BarTravelTime - Phase2TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
+			AnimMgr.AddChain(Quad_ProgressBar, "<a rot=\"180\" pos=\"30 -20\"/>", 1, CAnimManager::EAnimManagerEasing::QuadInOut);
 		}
-		AnimMgr.AddChain(Quad_ProgressBar, "<a size=\"" ^ BarSize ^ " 2\"/>", Phase2TravelTime, CAnimManager::EAnimManagerEasing::Linear);
+		AnimMgr.AddChain(Quad_ProgressBar, "<a size=\"" ^ BarSize ^ " 2\"/>", Phase2TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
 
 	} else {
 		
 		if (LocalPrevValue < 0.0) {
-			AnimMgr.Add(Quad_ProgressBar, "<a size=\"0 2\"/>", Now, BarTravelTime - Phase2TravelTime, CAnimManager::EAnimManagerEasing::Linear);
-			AnimMgr.AddChain(Quad_ProgressBar, "<a rot=\"0\" pos=\"30 -18\"/>", 1, CAnimManager::EAnimManagerEasing::Linear);
+			AnimMgr.Add(Quad_ProgressBar, "<a size=\"0 2\"/>", Now, BarTravelTime - Phase2TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
+			AnimMgr.AddChain(Quad_ProgressBar, "<a rot=\"0\" pos=\"30 -18\"/>", 1, CAnimManager::EAnimManagerEasing::QuadInOut);
 		}
 	
 		if (LocalMapDelta == 0.0) {
 
-			AnimMgr.AddChain(Quad_ProgressBar, "<a size=\"0 2\"/>", Phase2TravelTime, CAnimManager::EAnimManagerEasing::Linear);
+			AnimMgr.AddChain(Quad_ProgressBar, "<a size=\"0 2\"/>", Phase2TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
 
 		} else {
 
-			AnimMgr.AddChain(Quad_ProgressBar, "<a size=\"" ^ BarSize ^ " 2\"/>", Phase2TravelTime, CAnimManager::EAnimManagerEasing::Linear);
+			AnimMgr.AddChain(Quad_ProgressBar, "<a size=\"" ^ BarSize ^ " 2\"/>", Phase2TravelTime, CAnimManager::EAnimManagerEasing::QuadInOut);
 
 		}
 	}
@@ -734,7 +825,7 @@ Void UpdateLabel(Real _Map_Delta) {
 		Label_Info.TextColor = CL::HexToRgb("FFFFFF");
 		declare Real AbsMapDelta = ML::Abs(_Map_Delta);
 
-		Label_Info.Value = "" ^ (ML::ToReal(ML::NearestInteger(AbsMapDelta * 1000)) / 1000.0);
+		Label_Info.Value = "" ^ TimeToText(ML::NearestInteger(_Map_Delta * 1000));
 	}
 }
 
@@ -760,6 +851,136 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
 	Label_Red.Value = _RedMapWins ^ "";
 }
 
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // Update Live Ranking UI
+ Void UpdateRanking(Real _MaxTimeDelta, Integer _FinishTimeout) {
+	 // map Score Id to Player Id
+	 declare Ident[Ident] ScoreIdToPlayerId;
+	 foreach (Player in Players) {
+			 if (Player.Score != Null) {
+					 ScoreIdToPlayerId[Player.Score.Id] = Player.Id;
+			 }
+	 }
+ 
+	 declare K_PlayerState[][Integer][Integer] Ranking; // Ranking[<CP number>][<Time>][<Players>]
+	 declare Integer PlayersNb = 0;
+	 declare Integer GlobalLastCPTime = 2000000000;
+	 declare Integer GlobalLastCpNb = -1;
+
+	 declare CScore FastestScore;
+
+	 declare Integer FinishTimeout = _FinishTimeout * 1000;
+ 
+	 // Build Ranking array
+	 foreach (Score in Scores) {
+		 if (Score.User == Null) continue;
+ 
+ 
+		 declare K_PlayerState PlayerState = K_PlayerState {
+			 Name = Score.User.Name,
+			 Login = Score.User.Login,
+			 ScoreId = Score.Id,
+			 IsNotPlaying = True,
+			 Clan = Score.TeamNum,
+			 Score = Score
+		 };
+ 
+		 if (WarmupHelpers::IsWarmupActive(Teams[0])) {
+			 PlayerState.IsNotPlaying = False;
+		 } else {
+			 declare Ident PlayerId = ScoreIdToPlayerId.get(Score.Id, NullId);
+			 if (PlayerId != NullId) {
+				 declare CSmPlayer Player <=> Players.get(PlayerId, Null);
+				 if (Player != Null) {
+					 PlayerState.CPNb = Player.RaceWaypointTimes.count;
+					 PlayerState.IsNotPlaying = (Player.SpawnStatus == CSmPlayer::ESpawnStatus::NotSpawned);
+					 PlayerState.Finished = (Score.PrevRaceTimes.count != 0);
+ 
+					 if (PlayerState.CPNb > 0) {
+						 PlayerState.LastCPTime = Player.RaceWaypointTimes[-1];
+					 }
+					
+					 if (GlobalLastCpNb < PlayerState.CPNb) GlobalLastCpNb = PlayerState.CPNb;
+					 if (GlobalLastCpNb == PlayerState.CPNb && GlobalLastCPTime > PlayerState.LastCPTime) {
+					 	GlobalLastCPTime = PlayerState.LastCPTime;
+						FastestScore <=> Player.Score;
+					 }
+				 }
+			 }
+		 }
+ 
+		 if (!Ranking.existskey(PlayerState.CPNb)) Ranking[PlayerState.CPNb] = [];
+		 if (!Ranking[PlayerState.CPNb].existskey(PlayerState.LastCPTime)) Ranking[PlayerState.CPNb][PlayerState.LastCPTime] = [];
+ 
+		 Ranking[PlayerState.CPNb][PlayerState.LastCPTime].add(PlayerState);
+ 
+		 PlayersNb += 1;
+	 }
+
+	 declare CScore[] HandledScores;
+
+	 declare Integer TotalTeam1Time;
+
+	 declare Integer TotalTeam2Time;
+
+	 foreach (CPNb => CPTimes in Ranking) {
+		 // Sort Times for this CP
+		 declare K_PlayerState[][Integer] SortedCPTimes = CPTimes.sortkey();
+ 
+		 foreach (CPTime => PlayerStates in SortedCPTimes) {
+
+			foreach (Key => PlayerStateRO in PlayerStates) { // If multiple players have the same time
+				if (HandledScores.exists(PlayerStateRO.Score)) {
+					continue;
+				}
+				HandledScores.add(PlayerStateRO.Score);
+				if (CPNb == GlobalLastCpNb) {
+					if (PlayerStateRO.Clan == 1) {
+						TotalTeam1Time += CPTime;
+					} else {
+						TotalTeam2Time += CPTime; 
+					}		
+					continue;
+				}
+				declare Integer BaseTime = GlobalLastCPTime - Players.get(FastestScore.Id).RaceWaypointTimes[CPNb - 1];
+
+				if (PlayerStateRO.Clan == 1) {
+					TotalTeam1Time += CPTime + BaseTime;
+				} else {
+					TotalTeam2Time += CPTime + BaseTime; 
+				}	
+			}
+		}
+	}
+
+	if (TotalTeam1Time == 0.0 && GlobalLastCpNb > 0) {
+		TotalTeam1Time = FinishTimeout + GlobalLastCPTime;
+	}
+
+	if (TotalTeam2Time == 0.0 && GlobalLastCpNb > 0) {
+		TotalTeam2Time = FinishTimeout + GlobalLastCPTime;
+	}
+	
+		
+	 declare Real TotalDelta = (TotalTeam1Time - TotalTeam2Time) / 1000.0;
+
+	 declare CMlFrame Frame <=> (Page.GetFirstChild("frame-liveranking-content") as CMlFrame);
+
+	 UpdateQuads(TotalDelta, _MaxTimeDelta, Frame, "quad-live-blue", "quad-live-red", 27.5, 50);
+
+	 declare CMlLabel Label_Delta <=> (Frame.GetFirstChild("label-live-delta") as CMlLabel);
+	 declare CMlLabel Label_Blue_Delta <=> (Frame.GetFirstChild("label-blue-delta") as CMlLabel);
+	 declare CMlLabel Label_Red_Delta <=> (Frame.GetFirstChild("label-red-delta") as CMlLabel);
+
+	 Label_Delta.Value = TimeToText(ML::Min(
+	 ML::NearestInteger(_MaxTimeDelta * 1000),
+	 ML::Abs(ML::NearestInteger(TotalDelta * 1000))
+	 ));
+	 Label_Blue_Delta.Value = TimeToText(TotalTeam1Time);
+	 Label_Red_Delta.Value = TimeToText(TotalTeam2Time);
+ }
+ 
+
 main() {
 
 	declare Integer LatestDeltaVersion = 0;
@@ -770,6 +991,20 @@ main() {
 
 	declare Real PrevValue = 0.0;
 
+
+	 declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
+
+	 Frame_LiveRanking.Visible = True;
+
+	  
+	 declare netread Integer Net_LiveRanking_Serial for Teams[0];
+	 declare Integer Last_LiveRanking_Serial;
+
+	 declare netread Integer FinishTimeout for Teams[0] = -1;
+
+
+	 declare Boolean UpdateLiveRanking = True;
+
 	while (True) {
 		yield;
 		declare netread Integer DeltaVersion for Teams[0] = 0;
@@ -779,10 +1014,15 @@ main() {
 			UpdateLabel(Map_Delta);
 			UpdateCautionLabel(Map_Delta, MaxTimeDelta);
 			UpdateProgressBar(PrevValue, Map_Delta, MaxTimeDelta);
-			UpdateQuads(Map_Delta, MaxTimeDelta);
+			UpdateTopBar(Map_Delta, MaxTimeDelta);
 			LatestDeltaVersion = DeltaVersion;
 			PrevValue = Map_Delta;
 		}
+
+		 if (Last_LiveRanking_Serial != Net_LiveRanking_Serial) {
+			 Last_LiveRanking_Serial = Net_LiveRanking_Serial;
+			 UpdateLiveRanking = True;
+		 }
 
 		declare netread Integer RedMapWins for Teams[0] = 0;
 		declare netread Integer BlueMapWins for Teams[0] = 0;
@@ -792,6 +1032,12 @@ main() {
 			_RedMapWins = RedMapWins;
 			_BlueMapWins = BlueMapWins;
 		}
+
+		if (UpdateLiveRanking) {
+			declare netread Real MaxTimeDelta for Teams[0] = 0.0;
+			UpdateRanking(MaxTimeDelta, FinishTimeout);
+			UpdateLiveRanking = False;
+		}
 	}
 	
 }
@@ -799,7 +1045,7 @@ main() {
 --></script>
  </manialink>
 """;
-	Layers::Create(C_MlId_LiveRanking, MLText);
-	Layers::SetType(C_MlId_LiveRanking, CUILayer::EUILayerType::Normal);
-	Layers::Attach(C_MlId_LiveRanking);
+	Layers::Create("TugOfWar", MLText);
+	Layers::SetType("TugOfWar", CUILayer::EUILayerType::Normal);
+	Layers::Attach("TugOfWar");
 }
