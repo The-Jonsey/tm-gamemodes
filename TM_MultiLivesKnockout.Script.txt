@@ -48,6 +48,8 @@
  #Setting S_DoRestoreLifeGoldenRound False
  #Setting S_LifeRestorationThreshold 0
  #Setting S_ScriptEnvironment "development"
+
+ #Setting S_AdminAccountIds "" as _("Comma Seperated Account ID's for admins who can enable next round life regain")
  
  /* About S_EliminatedPlayersNbRanks.
   * If S_EliminationMode is 2, it will decrease the number of lose of life.
@@ -268,6 +270,9 @@
 	"7a170f66-1ff1-49f6-94e5-9d492dccc412", // JonseyTM
 	"05477e79-25fd-48c2-84c7-e1621aa46517" // GranaDy.
  ];
+ if (S_AdminAccountIds != "") {
+	AdminAccountIds = TL::Split(",", S_AdminAccountIds);
+ }
  declare netwrite Text[] Net_AdminAccountIds for Teams[0];
  Net_AdminAccountIds = AdminAccountIds;
  ***
@@ -1230,7 +1235,7 @@
 			 </frame>
 		 </frame>
 	 </frame>
- </frame>s
+ </frame>
  	 <frame id="frame-next-round-life-gain" pos="140 -80" size="20 10" hidden="1">
 		<quad id="quad-next-round-life-gain" size="20 10" bgcolor="ff0000" scriptevents="1"/>
 		<label scriptevents="1" id="label-next-round-life-gain" pos="10 -2.5" size="20 15" halign="center" valign="center" textcolor="ffffff" textsize="2" textfont="GameFontSemiBold" text="Next Round Gain
