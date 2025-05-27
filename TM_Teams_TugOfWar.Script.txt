@@ -218,8 +218,13 @@ UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_Max
 
 ***Match_StartRound***
 ***
-    declare netwrite Real MaxTimeDelta for Teams[0];
-    MaxTimeDelta = S_MaxTimeDelta;
+foreach (Score in Scores) {
+    declare GiveUp for Score = False;
+    GiveUp = False;
+}
+
+declare netwrite Real MaxTimeDelta for Teams[0];
+MaxTimeDelta = S_MaxTimeDelta;
 UpdateLiveRankingInfo();
 
 declare Text MaxRoundsText = S_MaxRounds ^ "";
@@ -237,7 +242,7 @@ StateMgr::ForcePlayersStates([StateMgr::C_State_Playing]);
 
 ***Rounds_CheckCanSpawn***
 ***
-if (!Teams::CanPlay(_Player, False)) return False;
+if (!Teams::CanPlay(_Player, False) || _Player.RequestsSpectate) return False;
 ***
 
 ***Rounds_SpawnPlayer***
@@ -285,6 +290,11 @@ foreach (Event in RacePendingEvents) {
                 declare Better = Scores::UpdatePlayerBestLapIfBetter(Event.Player);
             }
         }
+    }
+
+    if (Event.Type == Events::C_Type_GiveUp) {
+        declare GiveUp for Event.Player.Score = False;
+        GiveUp = True;
     }
 }
 
@@ -343,7 +353,12 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 
     declare Boolean FastestTimeSet = False;
 
+
     foreach (Score in PrevRaceRanking) {
+        declare GiveUp for Score = False;
+        if (Rounds_GetCanSpawn(Score) && !GiveUp) {
+            continue;
+        }
         if (!GetFinishedRace(Score)) {
             if (Score.TeamNum == 1) {
                 Team1Players += 1;
@@ -370,7 +385,11 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 
     declare Integer FinishTimeout = GetFinishTimeout();
 
-    UIModules_BigMessage::SetMessage("Finish Timeout " ^ FinishTimeout, 2000);
+    foreach (Score in Scores) {
+        if (Score.User != Null) {
+            UIManager.GetUI(Score.User).SendChat("Finish Timeout " ^ FinishTimeout ^ " DNFErs Blue: " ^ Team1_DNFPlayers ^ " Red: " ^ Team2_DNFPlayers ^ " Fastest Time: " ^ FastestTime);
+        }
+    }
 
     Team1_TotalTime += Team1_DNFPlayers * (FastestTime + FinishTimeout);
     Team2_TotalTime += Team2_DNFPlayers * (FastestTime + FinishTimeout);
@@ -404,7 +423,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
     }
 
 
-    declare Real PreviousAbsoluteDelta = ML::Abs(PreviousDelta);
+    declare Real PreviousAbsoluteDelta = ML::Abs(Map_TimeDelta);
 
     declare Boolean WinnerFound = False;
 
@@ -426,8 +445,6 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
             Team2_MapWins += 1;
         }
     }
-
-    // Map_TimeDelta = ML::Rand(-5000, 5000) / 1000.0;
 
     declare netwrite Real Map_Delta for Teams[0];
     Map_Delta = Map_TimeDelta;
@@ -618,6 +635,8 @@ Integer TeamAhead(Real _Time) {
     declare netwrite Integer Net_LiveRanking_Serial for Teams[0];
     Net_LiveRanking_Serial += 1;
 }
+
+
 
 
 Void LoadUI() {
@@ -925,6 +944,10 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
 
     declare Integer TotalTeam2Time;
 
+    declare Integer Team1Players;
+
+    declare Integer Team2Players;
+
     foreach (CPNb => CPTimes in Ranking) {
         // Sort Times for this CP
         declare K_PlayerState[][Integer] SortedCPTimes = CPTimes.sortkey();
@@ -935,6 +958,11 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
                 if (HandledScores.exists(PlayerStateRO.Score)) {
                     continue;
                 }
+                if (PlayerStateRO.Clan == 1) {
+                    Team1Players += 1;
+                } else {
+                    Team2Players += 1; 
+                }	
                 HandledScores.add(PlayerStateRO.Score);
                 if (CPNb == GlobalLastCpNb) {
                     if (PlayerStateRO.Clan == 1) {
@@ -946,7 +974,7 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
                 }
                 declare Integer BaseTime = GlobalLastCPTime;
 
-                if (CPNb > 0) BaseTime -= FastestScore.RaceWaypointTimes[CPNb - 1];
+                if (CPNb > 0 && FastestScore.RaceWaypointTimes.count >= CPNb) BaseTime -= FastestScore.RaceWaypointTimes[CPNb - 1];
 
                 if (PlayerStateRO.Clan == 1) {
                     TotalTeam1Time += CPTime + BaseTime;
@@ -963,6 +991,14 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
 
     if (TotalTeam2Time == 0.0 && GlobalLastCpNb > 0) {
         TotalTeam2Time = FinishTimeout + GlobalLastCPTime;
+    }
+
+    if (Team1Players != Team2Players) {
+        if (Team1Players < Team2Players) {
+            TotalTeam2Time = (TotalTeam2Time / Team2Players) * Team1Players;
+        } else {
+            TotalTeam1Time = (TotalTeam1Time / Team1Players) * Team2Players;
+        }
     }
 
 
@@ -1069,8 +1105,7 @@ main() {
         }
     }
     
-}
-    --></script>
+}    --></script>
 </manialink>
 """;
     Layers::Create("TugOfWar", MLText);
