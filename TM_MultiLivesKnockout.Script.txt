@@ -44,14 +44,17 @@
  #Setting S_MatchName "Final"
  #Setting S_AlternativeMatchInfosPosition False
  
- #Setting S_DoRestoreLife False
- #Setting S_DoRestoreLifeGoldenRound False
- #Setting S_LifeRestorationThreshold 0
- #Setting S_AllowMoreThanMaximumLives False
+ #Setting S_DoRestoreLife False as _("Whether to have automatic golden rounds, every round if only this is true")
+ #Setting S_DoRestoreLifeFinalRound False as _("Whether to have golden rounds as final round of each map")
+ #Setting S_LifeRestorationThreshold 0 as _("Minimum number of players required for a golden round, 0 is no limit")
+
+ #Setting S_AllowMoreThanMaximumLives False as _("Whether to allow players to gain more than S_MaximumLives on a golden round")
 
  #Setting S_ScriptEnvironment "development"
 
- #Setting S_AdminAccountIds "" as _("Comma Seperated Account ID's for admins who can enable next round life regain")
+ #Setting S_AdminAccountIds "" as _("Comma Seperated Account ID's for admins who can enable next round life gain")
+
+ #Setting S_MaxGainedLives 0 as _("Maximum lives that can be gained in Golden Rounds, 0 is infinite")
  
  /* About S_EliminatedPlayersNbRanks.
   * If S_EliminationMode is 2, it will decrease the number of lose of life.
@@ -307,9 +310,14 @@
  foreach (Score in Scores) {
 	 declare netwrite Boolean Net_MultiLivesKnockout_IsRegistered for Score;
 	 Net_MultiLivesKnockout_IsRegistered = False;
- 
-	 declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for Score;
-	 Net_MultiLivesKnockout_RemainingLives = S_MaximumLives;
+
+	 declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
+
+	 Net_MultiLivesKnockout_GainedLives = 0;
+
+	 declare netwrite Boolean Net_MultiLivesKnockout_OnGoldenLife for Score;
+
+	 Net_MultiLivesKnockout_OnGoldenLife = False;
  }
  UpdateCustomRanking(False);
  DisplayLiveRanking(False);
@@ -694,6 +702,9 @@
  Void RegisterScore(CSmScore _Score) {
 	 declare netwrite Boolean Net_MultiLivesKnockout_IsRegistered for _Score;
 	 Net_MultiLivesKnockout_IsRegistered = True;
+	 declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
+	 Net_MultiLivesKnockout_RemainingLives = S_MaximumLives;
+
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -746,6 +757,8 @@
  Void ConsumeLife(CSmScore _Score) {
 	 if (_Score == Null) return;
 	 declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
+	 declare netwrite Boolean Net_MultiLivesKnockout_OnGoldenLife for _Score;
+	 Net_MultiLivesKnockout_OnGoldenLife = False;
 	 Net_MultiLivesKnockout_RemainingLives -= 1;
  }
  
@@ -758,8 +771,13 @@
 	 if (_Score == Null) return;
 	 if (!ScoreIsAlive(_Score)) return;
 	 declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
+	 declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
+	 declare netwrite Boolean Net_MultiLivesKnockout_OnGoldenLife for _Score;
 	 if (Net_MultiLivesKnockout_RemainingLives == 0) return;
 	 if (!S_AllowMoreThanMaximumLives && Net_MultiLivesKnockout_RemainingLives >= S_MaximumLives) return;
+	 if (S_MaxGainedLives > 0 && Net_MultiLivesKnockout_GainedLives >= S_MaxGainedLives) return;
+	 Net_MultiLivesKnockout_OnGoldenLife = True;
+	 Net_MultiLivesKnockout_GainedLives += 1;
 	 Net_MultiLivesKnockout_RemainingLives += 1;
  }
  
@@ -798,7 +816,7 @@
 	if (_RoundNb <= S_RoundsWithoutElimination) return False;
 	if (!S_DoRestoreLife && !_CurrentRoundLifeGain) return False;
 	if (S_LifeRestorationThreshold > 0 && GetAliveScoresNb() < S_LifeRestorationThreshold) return False;
-	if (S_DoRestoreLifeGoldenRound && MB_GetValidRoundCount() != S_RoundsPerMap) return False;
+	if (S_DoRestoreLifeFinalRound && MB_GetValidRoundCount() != S_RoundsPerMap) return False;
 	// if (WarmupHelpers::IsWarmupActive(Teams[0])) return False;
 	return True;
  }
@@ -1144,8 +1162,8 @@
 			}
    
 			if (IsRestoreLifeRound(_CurrentRoundNb, _CurrentRoundLifeGain)) {
-			   MatchInfo ^= "\n1 player will regain a life";
-			   ScoreTablesInfo ^= " and 1 player will regain";
+			   MatchInfo ^= "\n1 player will gain a life";
+			   ScoreTablesInfo ^= " and 1 player will gain";
 			}
 		 }
 		
@@ -1306,6 +1324,7 @@ Disabled"/>
 	 Boolean InDanger;
 	 Boolean IsNotPlaying;
 	 Boolean Finished;
+	 Boolean OnGoldenLife;
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1432,6 +1451,13 @@ Disabled"/>
 		 case 1: Label_Player_Lives.Value = "";
 		 default: Label_Player_Lives.Value = _PlayerState.Lives ^ " x "; // If Lives = 0, it's because MaximumLives > 3
 	 }
+
+
+	 if (_PlayerState.OnGoldenLife) {
+		Label_Player_Lives.TextColor = CL::HexToRgb("D4Af37");
+	 } else {
+		Label_Player_Lives.TextColor = <1., 1., 1.>;
+	 }
  
 	 // Set Spectate Button
 	 declare CMlQuad Quad_Player_Button <=> (Frame_Player.GetFirstChild("quad-player-button") as CMlQuad);
@@ -1489,6 +1515,8 @@ Disabled"/>
 		 if (!Net_MultiLivesKnockout_IsRegistered) continue;
  
 		 declare netread Integer Net_MultiLivesKnockout_RemainingLives for Score;
+		 declare netread Boolean Net_MultiLivesKnockout_OnGoldenLife for Score;
+		 declare Boolean OnGoldenLife = Net_MultiLivesKnockout_OnGoldenLife;
 		 declare Integer Lives = Net_MultiLivesKnockout_RemainingLives;
 		 if (Lives <= 0) continue; // Skip KO player
  
@@ -1497,7 +1525,8 @@ Disabled"/>
 			 Login = Score.User.Login,
 			 ScoreId = Score.Id,
 			 Lives = Lives,
-			 IsNotPlaying = True
+			 IsNotPlaying = True,
+			 OnGoldenLife = OnGoldenLife
 		 };
  
 		 if (WarmupHelpers::IsWarmupActive(Teams[0])) {
