@@ -35,6 +35,7 @@
 #Setting S_MaxRoundDelta 5.0 as _("Max swing that can happen in a single round")
 #Setting S_MaxRounds -1 as _("Max rounds that can occur on a single map, -1 or 0 means infinite")
 
+ #Setting S_ScriptEnvironment "development"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
@@ -219,8 +220,8 @@ UIModules_ScoresTable::SetInfoMessage(TL::Compose("\n\nMax Time Delta: " ^ S_Max
 ***Match_StartRound***
 ***
 foreach (Score in Scores) {
-    declare GiveUp for Score = False;
-    GiveUp = False;
+    declare Boolean Spawned for Score = False;
+    declare Boolean GiveUp for Score = False;
 }
 
 declare netwrite Real MaxTimeDelta for Teams[0];
@@ -247,6 +248,7 @@ if (!Teams::CanPlay(_Player, False) || _Player.RequestsSpectate) return False;
 
 ***Rounds_SpawnPlayer***
 ***
+declare Boolean Spawned for Player.Score = True;
 Teams::MovePlayerToRequestedClan(This, Player, False);
 Race::Start(Player, StartTime);
 ***
@@ -355,8 +357,9 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 
 
     foreach (Score in PrevRaceRanking) {
-        declare GiveUp for Score = False;
-        if (Rounds_GetCanSpawn(Score) && !GiveUp) {
+        declare Boolean GiveUp for Score;
+        declare Boolean Spawned for Score;
+        if (!Spawned && !GiveUp) {
             continue;
         }
         if (!GetFinishedRace(Score)) {

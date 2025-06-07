@@ -1,0 +1,86 @@
+#Include "Libs/Nadeo/CMGame/Utils/Http.Script.txt" as Http
+#Include "Libs/Nadeo/TMGame/Modes/Scores.Script.txt" as Scores
+#Include "Libs/Nadeo/TMGame/Modes/Race.Script.txt" as Race
+
+#Struct K_ScoreJson {
+	Text ubisoftUid;
+	Integer finishTime;
+	Integer position;
+}
+
+#Struct K_ECircuitManiaPayload {
+	K_ScoreJson[] players;
+	Text mapId;
+	Integer roundNum;
+}
+
+// GLOBALS
+declare Text G_ECircuitManiaToken;
+declare Http::K_Request G_SaveRequest;
+
+K_ScoreJson[] CreateScoreJSON(CSmScore[] PrevRaceRanking) {
+	declare K_ScoreJson[] ScoresJson = [];
+	declare K_ScoreJson ScoreJson = K_ScoreJson{};
+	foreach (Index => Score in PrevRaceRanking) {
+		if (Score.User == Null) continue;
+		ScoreJson.ubisoftUid = Score.User.WebServicesUserId;
+		ScoreJson.position = Index + 1;
+		ScoreJson.finishTime = Scores::GetPlayerPrevRaceTime(Score); 
+		ScoresJson.add(ScoreJson);
+	}
+	return ScoresJson;
+}
+
+/**
+ * Creates and sends a request to eCircuitMania API of the previous round results
+ * @Param RoundNb			The number of the round on the current map that is being recorded, normally accessed via MB_GetRoundCount()
+ * @Param MapUid			The Uid of the map currently being played, normally accessed via Map.MapInfo.MapUid
+ * @Param PrevRaceRanking	The list of scores from the previous round sorted in order from best to worst, normally accessed via Race::GetPrevRaceRanking()
+ */
+Void TrySave(Integer RoundNb, Text MapUid, CSmScore[] PrevRaceRanking) {
+	if (G_ECircuitManiaToken == "") {
+		log("Skipping points backup as token is empty.");
+		return;
+	}
+	declare K_ScoreJson[] ScoreJson = CreateScoreJSON(PrevRaceRanking);
+	declare K_ECircuitManiaPayload Payload = K_ECircuitManiaPayload{players = ScoreJson, mapId = MapUid, roundNum = RoundNb};
+	declare Text HttpRequestBody = Payload.tojson();
+	if (Http::IsInitialized(G_SaveRequest)) {
+		G_SaveRequest = Http::Destroy(G_SaveRequest);
+	}
+	log(HttpRequestBody);
+	G_SaveRequest = Http::CreatePost("https://us-central1-fantasy-trackmania.cloudfunctions.net/match-addRound", HttpRequestBody, ["Content-Type" => "application/json", "Authorization" => G_ECircuitManiaToken]);
+	log("New Scores request at " ^ Now);
+}
+
+/**
+ * Creates and sends a request to eCircuitMania API of the previous round results, this calls the default method to get previous race ranking from the Race library
+ * @Param RoundNb			The number of the round on the current map that is being recorded, normally accessed via MB_GetRoundCount()
+ * @Param MapUid			The Uid of the map currently being played, normally accessed via Map.MapInfo.MapUid
+ */
+Void TrySave(Integer RoundNb, Text MapUid) {
+    declare CSmScore[] PrevRaceRanking = Race::GetPrevRaceRanking();
+	TrySave(RoundNb, MapUid, PrevRaceRanking);
+}
+
+Void SetECircuitManiaToken(Text _Token) {
+	G_ECircuitManiaToken = _Token;
+}
+
+Text GetECircuitManiaToken() {
+	return G_ECircuitManiaToken;
+}
+
+Void Yield() {
+	if (Http::IsInitialized(G_SaveRequest)) {
+		G_SaveRequest = Http::Update(G_SaveRequest);
+		if (!Http::IsRunning(G_SaveRequest)) {
+			if (Http::IsSuccess(G_SaveRequest)) {
+				log("Scores successfully saved.");
+			} else {
+				log("Failed saving scores.");
+			}
+			G_SaveRequest = Http::Destroy(G_SaveRequest);
+		}
+	}
+}
