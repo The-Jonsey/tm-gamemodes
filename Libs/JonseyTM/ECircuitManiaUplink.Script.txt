@@ -1,6 +1,7 @@
 #Include "Libs/Nadeo/CMGame/Utils/Http.Script.txt" as Http
 #Include "Libs/Nadeo/TMGame/Modes/Scores.Script.txt" as Scores
 #Include "Libs/Nadeo/TMGame/Modes/Race.Script.txt" as Race
+#Include "TextLib" as TL
 
 #Struct K_ScoreJson {
 	Text ubisoftUid;
@@ -16,6 +17,7 @@
 
 // GLOBALS
 declare Text G_ECircuitManiaToken;
+declare Text[] G_ServerAdminIds;
 declare Http::K_Request G_SaveRequest;
 
 K_ScoreJson[] CreateScoreJSON(CSmScore[] PrevRaceRanking) {
@@ -49,7 +51,12 @@ Void TrySave(Integer RoundNb, Text MapUid, CSmScore[] PrevRaceRanking) {
 		G_SaveRequest = Http::Destroy(G_SaveRequest);
 	}
 	log(HttpRequestBody);
-	G_SaveRequest = Http::CreatePost("https://us-central1-fantasy-trackmania.cloudfunctions.net/match-addRound", HttpRequestBody, ["Content-Type" => "application/json", "Authorization" => G_ECircuitManiaToken]);
+	declare Text[] TokenSplit = TL::Split("_", G_ECircuitManiaToken);
+	if (TokenSplit.count != 2) {
+		log("Invalid number of token parameters");
+		return;
+	}
+	G_SaveRequest = Http::CreatePost("https://us-central1-fantasy-trackmania.cloudfunctions.net/match-addRound" ^ Http::CreateQueryString(["matchId" => TokenSplit[0]]), HttpRequestBody, ["Content-Type" => "application/json", "Authorization" => TokenSplit[1]]);
 	log("New Scores request at " ^ Now);
 }
 
@@ -71,6 +78,14 @@ Text GetECircuitManiaToken() {
 	return G_ECircuitManiaToken;
 }
 
+Void SetServerAdminIds(Text[] _Ids) {
+	G_ServerAdminIds = _Ids;
+}
+
+Text[] GetServerAdminIds() {
+	return G_ServerAdminIds;
+}
+
 Void Yield() {
 	if (Http::IsInitialized(G_SaveRequest)) {
 		G_SaveRequest = Http::Update(G_SaveRequest);
@@ -78,7 +93,15 @@ Void Yield() {
 			if (Http::IsSuccess(G_SaveRequest)) {
 				log("Scores successfully saved.");
 			} else {
+				// TODO Add admin list to send chat message when it fails
+				for (Score in Scores) {
+					if (Score.User == Null) continue;
+					if (G_ServerAdminIds.exists(Score.User.WebServicesUserId)) {
+						UIManager.GetUI(Score.User).SendChat("Failed to send round results to eCircuitMania");
+					}
+				}
 				log("Failed saving scores.");
+				log(Http::GetStatusCode(G_SaveRequest));
 			}
 			G_SaveRequest = Http::Destroy(G_SaveRequest);
 		}

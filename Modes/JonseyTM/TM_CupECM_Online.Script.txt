@@ -1,0 +1,27 @@
+#Extends "Modes/TrackMania/TM_Cup_Online.Script.txt"
+
+
+#Include "Libs/JonseyTM/ECircuitManiaUplink.Script.txt" as ECircuitManiaUplink
+#Include "TextLib" as TL
+
+#Setting S_ECircuitManiaToken "" as "eCircuitMania Token"
+#Setting S_AdminAccountIds "" as _("Comma Seperated Account ID's for admins who gets eCircuitmania notifications")
+#Setting S_ScriptEnvironment "development"
+
+***Match_PlayLoop*** // Ideally this would be Match_Yield aswell but that doesn't support Globals
+***
+ if (S_ECircuitManiaToken != ECircuitManiaUplink::GetECircuitManiaToken()) ECircuitManiaUplink::SetECircuitManiaToken(S_ECircuitManiaToken);
+ if (TL::Split(",", S_AdminAccountIds) != ECircuitManiaUplink::GetServerAdminIds()) ECircuitManiaUplink::SetServerAdminIds(TL::Split(",", S_AdminAccountIds));
+***
+
+***Match_Yield***
+***
+ ECircuitManiaUplink::Yield();
+***
+
+***Match_EndRound***
+***
+ if (!Round_ForceEndRound && !Round_SkipPauseRound && !Round_Skipped) {
+    ECircuitManiaUplink::TrySave(MB_GetRoundCount(), Map.MapInfo.MapUid, Race::GetPrevRaceRanking());
+ }
+***
