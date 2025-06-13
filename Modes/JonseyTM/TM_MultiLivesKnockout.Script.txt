@@ -1087,7 +1087,7 @@
   */
  Boolean MapIsOver(Integer _RoundNb) {
 	 if (MatchIsOver(_RoundNb)) return True;
-	 if (S_RoundsPerMap > 0 && _RoundNb >= S_RoundsPerMap) return True; //< There is a rounds limit and it is reached
+	 if (S_RoundsPerMap > 0 && MB_GetValidRoundCount() >= S_RoundsPerMap) return True; //< There is a rounds limit and it is reached
  
 	 return False;
  }
