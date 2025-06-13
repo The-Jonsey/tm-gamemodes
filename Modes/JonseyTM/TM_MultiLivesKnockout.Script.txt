@@ -333,11 +333,10 @@
  declare Integer Round_LossOfLifeNb;
  declare Boolean Round_NeedInfoDisplayUpdate;
 
- Match_CurrentRoundNb += 1;
 
  declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
  CurrentRoundLifeGain = Net_NextRoundLifeGain;
- declare Integer NextRoundNb = Match_CurrentRoundNb + 1;
+ declare Integer NextRoundNb = Match_CurrentRoundNb + 2;
  if (WillMapBeOver(NextRoundNb)) {
  	NextRoundNb = 1;
  }
@@ -362,6 +361,7 @@
 	 }
  }
  
+ Match_CurrentRoundNb += 1;
  declare Integer AliveScoresNb = GetAliveScoresNb();
  Round_LossOfLifeNb = GetLossOfLifeNb(Match_CurrentRoundNb, AliveScoresNb);
  if (Round_LossOfLifeNb <= 0) {
