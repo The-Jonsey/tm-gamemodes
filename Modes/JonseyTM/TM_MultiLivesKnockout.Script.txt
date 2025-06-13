@@ -50,7 +50,7 @@
 
  #Setting S_AllowMoreThanMaximumLives False as _("Whether to allow players to gain more than S_MaximumLives on a golden round")
 
- #Setting S_ScriptEnvironment "development"
+ #Setting S_ScriptEnvironment "production"
 
  #Setting S_AdminAccountIds "" as _("Comma Seperated Account ID's for admins who can enable next round life gain")
 
