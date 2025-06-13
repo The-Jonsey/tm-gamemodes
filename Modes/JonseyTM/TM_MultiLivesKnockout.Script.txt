@@ -240,26 +240,7 @@
 	 }
  }*/
 
- foreach (Event in UIManager.PendingEvents) {
-	if (Event.CustomEventType == "NextRoundLifeGainEvent") {
-		declare netread Text[] Net_AdminAccountIds for Teams[0];
-		if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
-			declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
-			Net_NextRoundLifeGain = !Net_NextRoundLifeGain;
-			declare Text Message = "Next round is";
-			if (Net_NextRoundLifeGain) {
-				Message ^= " a life gain round";
-			} else {
-				Message ^= " not a life gain round";
-			}
-			foreach (Score in Scores) {
-				if (Score.User != Null) {
-					UIManager.GetUI(Score.User).SendChat(Message);
-				}
-			}
-		}
-	}
- }
+
  
  StateMgr::Yield();
  ***
@@ -314,10 +295,6 @@
 	 declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
 
 	 Net_MultiLivesKnockout_GainedLives = 0;
-
-	 declare netwrite Boolean Net_MultiLivesKnockout_OnGoldenLife for Score;
-
-	 Net_MultiLivesKnockout_OnGoldenLife = False;
  }
  UpdateCustomRanking(False);
  DisplayLiveRanking(False);
@@ -356,10 +333,15 @@
  declare Integer Round_LossOfLifeNb;
  declare Boolean Round_NeedInfoDisplayUpdate;
 
+ Match_CurrentRoundNb += 1;
 
  declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
  CurrentRoundLifeGain = Net_NextRoundLifeGain;
- Net_NextRoundLifeGain = False;
+ declare Integer NextRoundNb = Match_CurrentRoundNb + 1;
+ if (WillMapBeOver(NextRoundNb)) {
+ 	NextRoundNb = 1;
+ }
+ Net_NextRoundLifeGain = IsRestoreLifeRound(NextRoundNb, False);
  declare Text[] AdminAccountIds = [
 	"7a170f66-1ff1-49f6-94e5-9d492dccc412", // JonseyTM
 	"05477e79-25fd-48c2-84c7-e1621aa46517" // GranaDy.
@@ -380,7 +362,6 @@
 	 }
  }
  
- Match_CurrentRoundNb += 1;
  declare Integer AliveScoresNb = GetAliveScoresNb();
  Round_LossOfLifeNb = GetLossOfLifeNb(Match_CurrentRoundNb, AliveScoresNb);
  if (Round_LossOfLifeNb <= 0) {
@@ -535,6 +516,31 @@
  foreach (Event in PendingEvents) {
 	 if (Event.HasBeenPassed || Event.HasBeenDiscarded) continue;
 	 Events::Invalid(Event);
+ }
+
+  foreach (Event in UIManager.PendingEvents) {
+	if (Event.CustomEventType == "NextRoundLifeGainEvent") {
+		declare netread Text[] Net_AdminAccountIds for Teams[0];
+		declare Integer NextRoundNb = Match_CurrentRoundNb + 1;
+		if (MapIsOver(NextRoundNb - 1)) {
+			NextRoundNb = 1;
+		}
+		if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId) && !IsRestoreLifeRound(NextRoundNb, False)) {
+			declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
+			Net_NextRoundLifeGain = !Net_NextRoundLifeGain;
+			declare Text Message = "Next round is";
+			if (Net_NextRoundLifeGain) {
+				Message ^= " a life gain round";
+			} else {
+				Message ^= " not a life gain round";
+			}
+			foreach (Score in Scores) {
+				if (Score.User != Null) {
+					UIManager.GetUI(Score.User).SendChat(Message);
+				}
+			}
+		}
+	}
  }
  ***
  
@@ -757,8 +763,6 @@
  Void ConsumeLife(CSmScore _Score) {
 	 if (_Score == Null) return;
 	 declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
-	//  declare netwrite Boolean Net_MultiLivesKnockout_OnGoldenLife for _Score;
-	//  Net_MultiLivesKnockout_OnGoldenLife = False;
 	 Net_MultiLivesKnockout_RemainingLives -= 1;
  }
  
@@ -772,11 +776,9 @@
 	 if (!ScoreIsAlive(_Score)) return;
 	 declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
 	 declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
-	 declare netwrite Boolean Net_MultiLivesKnockout_OnGoldenLife for _Score;
 	 if (Net_MultiLivesKnockout_RemainingLives == 0) return;
 	 if (!S_AllowMoreThanMaximumLives && Net_MultiLivesKnockout_RemainingLives >= S_MaximumLives) return;
 	 if (S_MaxGainedLives > 0 && Net_MultiLivesKnockout_GainedLives >= S_MaxGainedLives) return;
-	 Net_MultiLivesKnockout_OnGoldenLife = True;
 	 Net_MultiLivesKnockout_GainedLives += 1;
 	 Net_MultiLivesKnockout_RemainingLives += 1;
  }
@@ -814,9 +816,10 @@
 
  Boolean IsRestoreLifeRound(Integer _RoundNb, Boolean _CurrentRoundLifeGain) {
 	if (_RoundNb <= S_RoundsWithoutElimination) return False;
-	if (!S_DoRestoreLife && !_CurrentRoundLifeGain) return False;
+	if (_CurrentRoundLifeGain) return True;
+	if (!S_DoRestoreLife) return False;
 	if (S_LifeRestorationThreshold > 0 && GetAliveScoresNb() < S_LifeRestorationThreshold) return False;
-	if (S_DoRestoreLifeFinalRound && MB_GetValidRoundCount() != S_RoundsPerMap) return False;
+	if (S_DoRestoreLifeFinalRound && _RoundNb != S_RoundsPerMap) return False;
 	// if (WarmupHelpers::IsWarmupActive(Teams[0])) return False;
 	return True;
  }
@@ -960,12 +963,15 @@
  Text GetScoreRemainingLivesText(CSmScore _Score) {
 	 declare Integer RemainingLives = GetScoreRemainingLives(_Score);
  
+	
 	 // Use text if too much lives
 	 if (RemainingLives > 5) return RemainingLives ^ " x ";
  
 	 declare Text Result = " ";
-	 if (RemainingLives < S_MaximumLives) {
-		for (I, 1, S_MaximumLives - RemainingLives) {
+	 declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
+	 declare Integer MaximumLives = ML::Min(S_MaximumLives + Net_MultiLivesKnockout_GainedLives, 5);
+	 if (RemainingLives < MaximumLives) {
+		for (I, 1, MaximumLives - RemainingLives) {
 			Result ^= " ";
 		}
 	 }
@@ -1081,7 +1087,13 @@
   */
  Boolean MapIsOver(Integer _RoundNb) {
 	 if (MatchIsOver(_RoundNb)) return True;
-	 if (S_RoundsPerMap > 0 && MB_GetValidRoundCount() >= S_RoundsPerMap) return True; //< There is a rounds limit and it is reached
+	 if (S_RoundsPerMap > 0 && _RoundNb >= S_RoundsPerMap) return True; //< There is a rounds limit and it is reached
+ 
+	 return False;
+ }
+
+ Boolean WillMapBeOver(Integer _RoundNb) {
+	 if (S_RoundsPerMap > 0 && _RoundNb > S_RoundsPerMap) return True; //< There is a rounds limit and it is reached
  
 	 return False;
  }
@@ -1323,7 +1335,7 @@ Disabled"/>
 	 Boolean InDanger;
 	 Boolean IsNotPlaying;
 	 Boolean Finished;
-	 Boolean OnGoldenLife;
+	 Integer GainedLives;
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1449,31 +1461,36 @@ Disabled"/>
  
 	 // Use text if too much lives
 	 if (_PlayerState.Lives > 5) {
-		 Label_Player_Lives.Value = _PlayerState.Lives ^ " x ";
+		 declare Text Value = _PlayerState.Lives ^ " x ";
+		 if (_PlayerState.GainedLives > 0) {
+			 Value = "$DB3" ^ Value ^ "$g";
+		 }
+
+		 Label_Player_Lives.Value = Value;
 		 Label_Player_Lives.Size = <9., 5.>;
 	 } else {
 		 declare Text Result = " ";
 
-		 if (_PlayerState.Lives < Net_MultiLivesKnockout_LiveRanking_MaximumLives) {
-		 	 for (I, 1, Net_MultiLivesKnockout_LiveRanking_MaximumLives - _PlayerState.Lives) {
+		 if (_PlayerState.Lives < ML::Min(Net_MultiLivesKnockout_LiveRanking_MaximumLives + _PlayerState.GainedLives, 5)) {
+		 	 for (I, 1, ML::Min(Net_MultiLivesKnockout_LiveRanking_MaximumLives + _PlayerState.GainedLives, 5) - _PlayerState.Lives) {
 		    	 Result ^= " ";
 		 	 }
 		 }
 
-		 for (I, 1, _PlayerState.Lives) {
+		 declare Integer NonGoldenLives = _PlayerState.Lives - _PlayerState.GainedLives;
+
+		 for (I, 1, NonGoldenLives) {
 			Result ^= " ";
-		}
+		 }
+
+		 for (I, 1, _PlayerState.Lives - NonGoldenLives) {
+			Result ^= "$DB3 $g";
+		 }
 		Label_Player_Lives.Value = Result;
-		declare Real LabelSize = ML::Max(_PlayerState.Lives, Net_MultiLivesKnockout_LiveRanking_MaximumLives) * 3.;
+		declare Real LabelSize = ML::Max(_PlayerState.Lives, Net_MultiLivesKnockout_LiveRanking_MaximumLives + _PlayerState.GainedLives) * 3.;
 		Label_Player_Lives.Size = <LabelSize, 5.>;
 	}
 
-
-	 if (_PlayerState.OnGoldenLife) {
-		Label_Player_Lives.TextColor = CL::HexToRgb("D4Af37");
-	 } else {
-		Label_Player_Lives.TextColor = <1., 1., 1.>;
-	 }
  
 	 // Set Spectate Button
 	 declare CMlQuad Quad_Player_Button <=> (Frame_Player.GetFirstChild("quad-player-button") as CMlQuad);
@@ -1531,8 +1548,7 @@ Disabled"/>
 		 if (!Net_MultiLivesKnockout_IsRegistered) continue;
  
 		 declare netread Integer Net_MultiLivesKnockout_RemainingLives for Score;
-		 declare netread Boolean Net_MultiLivesKnockout_OnGoldenLife for Score;
-		 declare Boolean OnGoldenLife = Net_MultiLivesKnockout_OnGoldenLife;
+		 declare netread Integer Net_MultiLivesKnockout_GainedLives for Score;
 		 declare Integer Lives = Net_MultiLivesKnockout_RemainingLives;
 		 if (Lives <= 0) continue; // Skip KO player
  
@@ -1542,7 +1558,7 @@ Disabled"/>
 			 ScoreId = Score.Id,
 			 Lives = Lives,
 			 IsNotPlaying = True,
-			 OnGoldenLife = OnGoldenLife
+			 GainedLives = Net_MultiLivesKnockout_GainedLives
 		 };
  
 		 if (WarmupHelpers::IsWarmupActive(Teams[0])) {
