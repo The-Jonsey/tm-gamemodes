@@ -29,7 +29,7 @@ K_ScoreJson CreateScoreJSON() {
 	 	declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
 		LivesJson.LivesRemaining = Net_MultiLivesKnockout_RemainingLives;
 		LivesJson.LivesGained = Net_MultiLivesKnockout_GainedLives;
-		ScoreJson.scores[Score.User.Login] = LivesJson;
+		ScoreJson.scores[Score.User.WebServicesUserId] = LivesJson;
 	}
 	return ScoreJson;
 }
@@ -37,9 +37,9 @@ K_ScoreJson CreateScoreJSON() {
 Void ApplyScoreJSON(K_ScoreJson _ScoreJson) {
 	log(_ScoreJson.tojson());
 	Scores::Clear();
-	foreach (Login => Points in _ScoreJson.scores) {
+	foreach (WebServicesUserId => Points in _ScoreJson.scores) {
 		foreach (Score in Scores) {
-			if (Score.User == Null || Score.User.Login != Login) continue;
+			if (Score.User == Null || Score.User.WebServicesUserId != WebServicesUserId) continue;
 			log(Points);
 			declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for Score;
 		 	declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
