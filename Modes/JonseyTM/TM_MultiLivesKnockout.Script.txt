@@ -336,7 +336,7 @@
 
  declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
  CurrentRoundLifeGain = Net_NextRoundLifeGain;
- declare Integer NextRoundNb = Match_CurrentRoundNb + 2;
+ declare Integer NextRoundNb = MB_GetValidRoundCount() + 1;
  if (WillMapBeOver(NextRoundNb)) {
  	NextRoundNb = 1;
  }
@@ -380,7 +380,7 @@
 	  //L16N [Knockout] Announce the number of players that will be eliminated at the end of the round. %1 will be replaced by a marker for Typography
 	  ObjectiveMessage = TL::Compose("%1No loss of life this round", "$t$i$fff");
  } else {
-	if (IsRestoreLifeRound(Match_CurrentRoundNb, CurrentRoundLifeGain)) {
+	if (IsRestoreLifeRound(MB_GetValidRoundCount(), CurrentRoundLifeGain)) {
 		 if (Round_LossOfLifeNb == 1){
 		 	//L16N [Knockout] Announce the number of players that will be eliminated at the end of the round. %1 will be replaced by the digit 1. eg: "1 player will be eliminated".
 		 	ObjectiveMessage = TL::Compose("%1 player will lose a life and 1 player will gain a life", "$t$i$fff"^TL::ToText(Round_LossOfLifeNb));
@@ -521,7 +521,7 @@
   foreach (Event in UIManager.PendingEvents) {
 	if (Event.CustomEventType == "NextRoundLifeGainEvent") {
 		declare netread Text[] Net_AdminAccountIds for Teams[0];
-		declare Integer NextRoundNb = Match_CurrentRoundNb + 1;
+		declare Integer NextRoundNb = MB_GetValidRoundCount() + 1;
 		if (MapIsOver(NextRoundNb - 1)) {
 			NextRoundNb = 1;
 		}
@@ -585,7 +585,7 @@
 		 declare Integer LossOfLifeNb = GetLossOfLifeNb(Match_CurrentRoundNb, AliveScoresNb);
 		 declare Integer Rank = AliveScoresNb;
  
-		 if (IsRestoreLifeRound(Match_CurrentRoundNb, CurrentRoundLifeGain)) {
+		 if (IsRestoreLifeRound(MB_GetValidRoundCount(), CurrentRoundLifeGain)) {
 				 foreach (Score in GetPrevRaceRanking()) {
 					 if (Score.User == Null) continue;
 					 if (!ScoreIsAlive(Score)) continue;
