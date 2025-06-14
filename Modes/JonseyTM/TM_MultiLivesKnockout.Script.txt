@@ -520,7 +520,7 @@
 
   foreach (Event in UIManager.PendingEvents) {
 	if (Event.CustomEventType == "NextRoundLifeGainEvent") {
-		declare netread Text[] Net_AdminAccountIds for Teams[0];
+		declare netwrite Text[] Net_AdminAccountIds for Teams[0];
 		declare Integer NextRoundNb = MB_GetValidRoundCount() + 1;
 		if (MapIsOver(NextRoundNb - 1)) {
 			NextRoundNb = 1;
