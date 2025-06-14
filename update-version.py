@@ -17,14 +17,21 @@ def update_version_in_file(file_path):
     for line in lines:
         match = re.search(version_pattern, line)
         if match:
+            print(match.group(3))
             old_date = match.group(1)
-            old_increment = match.group(3) if match.group(3) else '1'
+            old_increment = '1'
+            if match.group(3):
+                old_increment = match.group(3)
             if old_date == current_date:
                 # Increment the number after '+'
-                new_line = line.replace(f'+{old_increment}"', f'+{int(old_increment) + 1}"')
+                if match.group(3):
+                    new_line = line.replace(f'+{match.group(3)}"', f'+{int(old_increment) + 1}"')
+                else:
+                    new_line = line.replace(old_date, old_date + "+1")
             else:
                 # Set new date and reset the increment to 1
-                new_line = line.replace(old_date, current_date).replace(f'+{old_increment}"', '+1"')
+                new_line = line.replace(old_date, current_date)
+            print(new_line)
             updated_lines.append(new_line)
         else:
             updated_lines.append(line)
@@ -34,7 +41,7 @@ def update_version_in_file(file_path):
         file.writelines(updated_lines)
 
 # Iterate over all modified .Script.txt files and update them
-modified_files = os.getenv('MODIFIED_FILES').splitlines()
+modified_files = os.getenv('MODIFIED_FILES').split(" ")
 for file_path in modified_files:
     if file_path.endswith('.Script.txt'):
         update_version_in_file(file_path)
