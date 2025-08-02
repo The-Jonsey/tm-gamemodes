@@ -334,7 +334,7 @@ if (Semver::Compare(XmlRpc::GetApiVersion(), ">=", "2.1.1")) {
 	Scores::XmlRpc_SendScores(Scores::C_Section_PreEndRound, "");
 }
 
-if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
+if (Round_ForceEndRound || Round_SkipPauseRound) {
 	// Cancel points
 	foreach (Score in Scores) {
 		Scores::SetPlayerRoundPoints(Score, 0);
