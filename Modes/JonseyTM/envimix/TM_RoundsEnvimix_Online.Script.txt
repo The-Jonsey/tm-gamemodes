@@ -4,7 +4,7 @@
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
 #Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
-#Const	Version							"2025-01-12+1"
+#Const	Version							"2025-08-02+1"
 #Const	ScriptName					"Modes/TrackMania/TM_RoundsEnvimix_Online.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
