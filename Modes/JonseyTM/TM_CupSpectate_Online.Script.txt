@@ -1,0 +1,44 @@
+#Extends "Modes/TrackMania/TM_Cup_Online.Script.txt"
+
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // MARK: Libraries
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+
+#Include "Libs/Nadeo/Trackmania/Modes/Rounds/UIModules/SmallScoresTable_Server.Script.txt" as UIModules_SmallScoresTable
+#Include "Libs/JonseyTM/UIModules/SpectateScoresTable.Script.txt" as UIModules_SpectateScoresTable
+
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // MARK: Constants
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ // MARK: Extends
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ ***Match_AfterLoadHud***
+ ***
+ UIModules::UnloadModule(UIModules_SmallScoresTable::GetId());
+ UIModules_SpectateScoresTable::LoadManialinks();
+ ***
+
+ ***Match_StartMatch***
+ ***
+ UIModules_SpectateScoresTable::DisplayLiveRanking(False);
+ ***
+
+ ***Match_StartRound***
+ ***
+ UIModules_SpectateScoresTable::UpdateLiveRanking();
+ UIModules_SpectateScoresTable::DisplayLiveRanking(True);
+ ***
+
+ ***Match_PlayLoop***
+ ***
+ foreach (Event in RacePendingEvents) {
+    UIModules_SpectateScoresTable::UpdateLiveRanking();
+ }
+ ***
+
+ ***Match_EndRound***
+ ***
+ UIModules_SpectateScoresTable::DisplayLiveRanking(False);
+ ***

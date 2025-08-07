@@ -1,4 +1,4 @@
-#Extends "Modes/TrackMania/TM_Cup_Online.Script.txt"
+#Extends "Modes/JonseyTM/TM_CupSpectate_Online.Script.txt"
 
 
 #Include "Libs/JonseyTM/ECircuitManiaUplink.Script.txt" as ECircuitManiaUplink
