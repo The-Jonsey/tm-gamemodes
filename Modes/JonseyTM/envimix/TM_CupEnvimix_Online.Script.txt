@@ -21,6 +21,8 @@
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/Checkpoint_Server.Script.txt" as UIModules_Checkpoint
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/PauseMenuOnline_Server.Script.txt" as UIModules_PauseMenu_Online
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/BigMessage_Server.Script.txt" as UIModules_BigMessage
+#Include "Libs/Nadeo/Trackmania/Modes/Rounds/UIModules/SmallScoresTable_Server.Script.txt" as UIModules_SmallScoresTable
+#Include "Libs/JonseyTM/UIModules/SpectateScoresTable.Script.txt" as UIModules_SpectateScoresTable
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Settings
@@ -123,6 +125,8 @@ UIModules_Sign16x9Small::SetScoreMode(UIModules_Sign16x9Small::C_ScoreMode_Point
 // Hide SM Overlay
 UIManager.UIAll.OverlayHideSpectatorInfos = True;
 UIManager.UIAll.OverlayHideCountdown = True;
+UIModules::UnloadModule(UIModules_SmallScoresTable::GetId());
+UIModules_SpectateScoresTable::LoadManialinks();
 ***
 
 ***Match_Yield***
@@ -198,13 +202,13 @@ ModelIds["CarDesert"] = ItemList_Add("CarDesert");
  if (S_RallyCarEnabled) {
 	ModelNames.add("CarRally");
  }
-ModelNames = RandomiseCarList(ModelNames);
 declare Integer CarIndex = 0;
 ***
 
 ***Match_StartMatch***
 ***
 UIModules_ScoresTable::SetCustomPoints([]);
+UIModules_SpectateScoresTable::DisplayLiveRanking(False);
 ***
 
 ***Match_InitMap***
@@ -282,6 +286,8 @@ StartTime = Now + Race::C_SpawnDuration;
 ***
 UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
 StateMgr::ForcePlayersStates([CupCommon_Const::C_State_Playing]);
+UIModules_SpectateScoresTable::UpdateLiveRanking();
+UIModules_SpectateScoresTable::DisplayLiveRanking(True);
 ***
 
 ***Match_StartPlayLoop***
@@ -319,6 +325,7 @@ foreach (Event in PendingEvents) {
 // Manage race events
 declare RacePendingEvents = Race::GetPendingEvents();
 foreach (Event in RacePendingEvents) {
+	UIModules_SpectateScoresTable::UpdateLiveRanking();
 	Race::ValidEvent(Event);
 
 	// Waypoint
@@ -365,6 +372,7 @@ if (
 
 ***Match_EndRound***
 ***
+UIModules_SpectateScoresTable::DisplayLiveRanking(False);
 Race::StopSkipOutroAll();
 EndTime = -1;
 StateMgr::ForcePlayersStates([CupCommon_Const::C_State_Waiting]);
