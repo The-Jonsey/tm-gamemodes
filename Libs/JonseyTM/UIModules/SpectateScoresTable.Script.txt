@@ -48,7 +48,8 @@
 	 <quad id="quad-player-button" pos="0 0" size="55 5" opacity="0" scriptevents="1"/>
 	 <quad id="quad-player-selector" pos="0 0" size="42.8 4.8" opacity="0" bgcolor="ffffff"/>
 	 <label id="label-player-rank" pos="3 -2.1" z-index="2" size="5 5" halign="center" valign="center" textsize="1.5" textfont="GameFontSemiBold" textcolor="dedede"/>
-	 <label id="label-player-name" pos="6 -2.1" z-index="2" size="45 5"  halign="left" valign="center" textsize="1.5" textfont="GameFontExtraBold" textcolor="ffffff"/>
+	 <label id="label-player-name" pos="6 -2.1" z-index="2" size="20 5"  halign="left" valign="center" textsize="1.5" textfont="GameFontExtraBold" textcolor="ffffff"/>
+	 <label id="label-player-points" pos="42 -2" z-index="2" size="9 5"  halign="right" valign="center" textsize="2" textfont="Nadeo/Trackmania/BebasNeueRegular" textcolor="ffffff"/>
 	 <quad id="quad-player-time-background" pos="55 0" size="12 4.8" halign="right" bgcolor="ffffff" opacity="0.2"/>
 	 <label id="label-player-time" pos="54 -2" z-index="2" size="10 5" halign="right" valign="center" textsize="2" textfont="Nadeo/Trackmania/BebasNeueRegular" textcolor="ffffff"/>
  </framemodel>
@@ -56,7 +57,8 @@
 	 <frame id="frame-liveranking" pos="-160 30" size="65 90" hidden="1">
 		 <frame id="frame-liveranking-content">
 			 <quad id="quad-liveranking-background" size="55 12" bgcolor="000000" opacity="0.6"/>
-			 <label pos="27.5 -3" halign="center" textsize="2.5" textfont="GameFontExtraBold" textcolor="ffffff" text="LIVE RANKING"/>
+			 <label id="label-liveranking-header" pos="27.5 -1" halign="center" textsize="2.5" textfont="GameFontExtraBold" textcolor="ffffff" text="LIVE RANKING"/>
+			 <textedit id="textedit-player-search" size="55 4" pos="0 -6" textsize="2" scriptevents="1" textformat="Basic" default="" name="Player" textcolor="ffffff" textfont="GameFontSemiBold" maxline="1" autonewline="0"/>
 			 <frame id="frame-liveranking-players" pos="0 -10">
 				 <frameinstance pos="0 0" modelid="framemodel-player" hidden="1"/>
 				 <frameinstance pos="0 -5" modelid="framemodel-player" hidden="1"/>
@@ -108,6 +110,8 @@
 	 Integer Delta;
 	 Boolean IsNotPlaying;
 	 Boolean Finished;
+	 Integer Points;
+	 Integer RoundPoints;
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -168,6 +172,15 @@
 	 Tools::FitLabelValue(Label_Player_Name, 1.5, .8, .1);
 
 
+	 //Set Points
+	 declare CMlLabel Label_Player_Points <=> (Frame_Player.GetFirstChild("label-player-points") as CMlLabel);
+	 declare PointsValue = TL::ToText(_PlayerState.Points);
+
+	 if(_PlayerState.Finished) {
+		PointsValue ^= " + " ^ TL::ToText(_PlayerState.RoundPoints);
+	 }
+
+	 Label_Player_Points.Value = PointsValue;
  
 	 // Set Spectate Button
 	 declare CMlQuad Quad_Player_Button <=> (Frame_Player.GetFirstChild("quad-player-button") as CMlQuad);
@@ -178,6 +191,7 @@
 	 // Set CP Time Background
 	 declare CMlQuad Quad_Player_Time_Background <=> (Frame_Player.GetFirstChild("quad-player-time-background") as CMlQuad);
 	 if (WarmupHelpers::IsWarmupActive(Teams[0])) Quad_Player_Time_Background.BgColor = <0.96, 0.35, 0.14>;
+	 else if (_PlayerState.Finished) Quad_Player_Time_Background.BgColor = <0.5, 0.5, 0.5>;
 	 else Quad_Player_Time_Background.BgColor = <1., 1., 1.>;
  
 	 //Set background opacity (if playing or spectated)
@@ -213,7 +227,11 @@
 	 declare K_PlayerState[][Integer][Integer] Ranking; // Ranking[<CP number>][<Time>][<Players>]
 	 declare Integer PlayersNb = 0;
 	 declare Integer GlobalLastCPTime = -1;
- 
+
+	 declare CMlTextEdit TextEdit_Player_Search = (Page.GetFirstChild("textedit-player-search") as CMlTextEdit);
+
+	 declare Text PlayerNameSearch = TextEdit_Player_Search.Value;
+
 	 // Build Ranking array
 	 foreach (Score in Scores) {
 		 if (Score.User == Null) continue;
@@ -222,7 +240,9 @@
 			 Name = Score.User.Name,
 			 Login = Score.User.Login,
 			 ScoreId = Score.Id,
-			 IsNotPlaying = True
+			 IsNotPlaying = True,
+			 Points = Score.Points,
+			 RoundPoints = Score.RoundPoints
 		 };
  
 		 if (WarmupHelpers::IsWarmupActive(Teams[0])) {
@@ -315,50 +335,53 @@
 					 }
 					 PlayerState.Delta = Delta;
 				 }
+
+				 if (PlayerNameSearch == "" || TL::Find(PlayerNameSearch, PlayerState.Name, False, False)) {
  
-				 if (DisplayLinesNb >= PlayersNb) { // Enough lines to display
-					 UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
-					 FrameIndex += 1;
-				 } else if (RemainingTopLines > 0) { // Display Top
-					 UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
-					 if (!GUIPlayerIsPassed) GUIPlayerIsPassed = (GUIPlayer.Score.Id == PlayerState.ScoreId);
-					 RemainingTopLines -= 1;
-					 FrameIndex += 1;
-				 } else if (GUIPlayerIsPassed && RemainingMiddleLines > 0) { // Display lines after GUIPlayer before the danger zone
-					 UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
-					 RemainingMiddleLines -= 1;
-					 FrameIndex += 1;
-				 } else if (GUIPlayerIsPassed && Rank >= LostOfLifeRank) { // In danger zone
-					 UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
-					 FrameIndex += 1;
-				 } else if (!GUIPlayerIsPassed && GUIPlayer.Score.Id == PlayerState.ScoreId) { // Display Previous Players + GUIPlayer in Middle lines
-					 // The slicing method is a very complex thing, do not touch if you don't want to break everything
-					 declare Integer MinLinesBefore = ML::NearestInteger((MiddleLinesNb - 1) / 2.); // Ceiling return 2 for 1.0 in Maniascript. So using NearestInteger
-					 declare Integer MaxLinesAfter = MaxDangerLines - MinLinesBefore - 1;
-					 declare Integer RemainingPlayers = PlayersNb - Rank;
- 
-					 declare Integer Slice = ML::Max(PreviousPlayerStates.count - MinLinesBefore - ML::Max(MaxLinesAfter - RemainingPlayers, 0), 0);
- 
-					 PreviousPlayerStates = PreviousPlayerStates.slice(Slice);
- 
-					 // Display previous PlayerStates
-					 while (PreviousPlayerStates.count > 0) {
-						 UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PreviousPlayerStates[0]);
-						 PreviousPlayerStates = PreviousPlayerStates.slice(1);
-						 FrameIndex += 1;
-						 RemainingMiddleLines -= 1;
-					 }
-					 // display current PlayerState
-					 UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
- 
-					 GUIPlayerIsPassed = True;
-					 FrameIndex += 1;
-					 RemainingMiddleLines -= 1;
-				 } else { // Store Previous PlayerStates
-					 PreviousPlayerStates.add(PlayerState);
-					 if (PreviousPlayerStates.count > MaxDangerLines) {
-						 PreviousPlayerStates = PreviousPlayerStates.slice(1);
-					 }
+					if (DisplayLinesNb >= PlayersNb) { // Enough lines to display
+						UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
+						FrameIndex += 1;
+					} else if (RemainingTopLines > 0) { // Display Top
+						UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
+						if (!GUIPlayerIsPassed) GUIPlayerIsPassed = (GUIPlayer.Score.Id == PlayerState.ScoreId);
+						RemainingTopLines -= 1;
+						FrameIndex += 1;
+					} else if (GUIPlayerIsPassed && RemainingMiddleLines > 0) { // Display lines after GUIPlayer before the danger zone
+						UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
+						RemainingMiddleLines -= 1;
+						FrameIndex += 1;
+					} else if (GUIPlayerIsPassed && Rank >= LostOfLifeRank) { // In danger zone
+						UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
+						FrameIndex += 1;
+					} else if (!GUIPlayerIsPassed && GUIPlayer.Score.Id == PlayerState.ScoreId) { // Display Previous Players + GUIPlayer in Middle lines
+						// The slicing method is a very complex thing, do not touch if you don't want to break everything
+						declare Integer MinLinesBefore = ML::NearestInteger((MiddleLinesNb - 1) / 2.); // Ceiling return 2 for 1.0 in Maniascript. So using NearestInteger
+						declare Integer MaxLinesAfter = MaxDangerLines - MinLinesBefore - 1;
+						declare Integer RemainingPlayers = PlayersNb - Rank;
+	
+						declare Integer Slice = ML::Max(PreviousPlayerStates.count - MinLinesBefore - ML::Max(MaxLinesAfter - RemainingPlayers, 0), 0);
+	
+						PreviousPlayerStates = PreviousPlayerStates.slice(Slice);
+	
+						// Display previous PlayerStates
+						while (PreviousPlayerStates.count > 0) {
+							UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PreviousPlayerStates[0]);
+							PreviousPlayerStates = PreviousPlayerStates.slice(1);
+							FrameIndex += 1;
+							RemainingMiddleLines -= 1;
+						}
+						// display current PlayerState
+						UpdateRankingPlayer(Frame_Players.Controls[FrameIndex], PlayerState);
+	
+						GUIPlayerIsPassed = True;
+						FrameIndex += 1;
+						RemainingMiddleLines -= 1;
+					} else { // Store Previous PlayerStates
+						PreviousPlayerStates.add(PlayerState);
+						if (PreviousPlayerStates.count > MaxDangerLines) {
+							PreviousPlayerStates = PreviousPlayerStates.slice(1);
+						}
+					}
 				 }
  
 				 Rank += 1;
@@ -369,25 +392,20 @@
 		 if (!Frame_Players.Controls.existskey(FrameIndex)) break;
 	 }
  
-	 // Manage if Nb Of players changed
-	 declare Integer Last_NbOfFrames for Frame_Players = 0;
-	 if (Last_NbOfFrames != DisplayLinesNb) {
-		 Last_NbOfFrames = DisplayLinesNb;
  
-		 // Set
-		 declare CMlQuad Quad_Bg <=> (Page.GetFirstChild("quad-liveranking-background") as CMlQuad);
-		 Quad_Bg.Size.Y = ML::ToReal(12 + (Last_NbOfFrames * 5));
- 
-		 // Hide other Frame_Players
-		 while (FrameIndex < Frame_Players.Controls.count) {
-			 if (Frame_Players.Controls[FrameIndex].Visible) {
-				 Frame_Players.Controls[FrameIndex].Visible = False;
-				 FrameIndex += 1;
-			 } else {
-				 break;
-			 }
-		 }
-	 }
+	// Set
+	declare CMlQuad Quad_Bg <=> (Page.GetFirstChild("quad-liveranking-background") as CMlQuad);
+	Quad_Bg.Size.Y = ML::ToReal(ML::Min(10 + (DisplayLinesNb * 5), 70));
+
+	// Hide other Frame_Players
+	while (FrameIndex < Frame_Players.Controls.count) {
+		if (Frame_Players.Controls[FrameIndex].Visible) {
+			Frame_Players.Controls[FrameIndex].Visible = False;
+			FrameIndex += 1;
+		} else {
+			break;
+		}
+	}
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -404,6 +422,10 @@
 	 log("Init "^ ScriptName ^" v"^ Version);
 	 declare CMlFrame Frame_Global <=> (Page.GetFirstChild("frame-global") as CMlFrame);
 	 declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
+
+	 declare CMlTextEdit TextEdit_Player_Search = (Frame_LiveRanking.GetFirstChild("textedit-player-search") as CMlTextEdit);
+
+	 declare CMlLabel Label_Liveranking_Header = (Frame_LiveRanking.GetFirstChild("label-liveranking-header") as CMlLabel);
  
 	 wait (InputPlayer != Null);
 
@@ -418,6 +440,8 @@
 	 declare Ident Last_GUIPlayer;
  
 	 declare Boolean UpdateLiveRanking = True;
+
+	 declare Text SearchValue = "";
  
 	 while (True) {
 		 yield;
@@ -427,6 +451,12 @@
 		 if (!Frame_LiveRanking.Visible) {
 			 DisplayWarning(False);
 			 continue;
+		 }
+
+		 if (InputPlayer.RequestsSpectate) {
+			TextEdit_Player_Search.Visible = True;
+		 } else {
+			TextEdit_Player_Search.Visible = False;
 		 }
  
 		 if (Last_LiveRanking_Serial != Net_Spectate_LiveRanking_Serial) {
@@ -442,6 +472,7 @@
 							 if (InputPlayer == GUIPlayer) continue;
 							 declare Text Quad_Login for Event.Control = "";
 							 SpectateLogin(Quad_Login);
+							 TextEdit_Player_Search.Value = "";
 						 }
 					 }
 				 }
@@ -467,6 +498,11 @@
 					 }
 				 }
 			 }
+		 }
+
+		 if (SearchValue != TextEdit_Player_Search.Value) {
+			UpdateLiveRanking = True;
+			SearchValue = TextEdit_Player_Search.Value;
 		 }
  
 		 if (GUIPlayer == Null && Last_GUIPlayer != NullId) {
