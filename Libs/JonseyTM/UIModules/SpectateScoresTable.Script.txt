@@ -453,10 +453,11 @@
 			 continue;
 		 }
 
-		 if (InputPlayer.RequestsSpectate) {
+		 if (InputPlayer != GUIPlayer) {
 			TextEdit_Player_Search.Visible = True;
 		 } else {
 			TextEdit_Player_Search.Visible = False;
+			TextEdit_Player_Search.Value = "";
 		 }
  
 		 if (Last_LiveRanking_Serial != Net_Spectate_LiveRanking_Serial) {
