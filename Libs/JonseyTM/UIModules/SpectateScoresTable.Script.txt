@@ -39,6 +39,13 @@
  }
 
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+ /// Update LiveRanking
+ Void UpdatePointLimit(Integer PointLimit) {
+	declare netwrite Integer Net_Spectate_LiveRanking_PointLimit for Teams[0];
+	Net_Spectate_LiveRanking_PointLimit = PointLimit;
+ }
+
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  /// Load Manialinks
  Void LoadManialinks() {
 	 declare Text MLText = """
@@ -55,6 +62,9 @@
  </framemodel>
  <frame id="frame-global" hidden="1">
 	 <frame id="frame-liveranking" pos="-160 30" size="65 90" hidden="1">
+		 <frame pos="55 0">
+			 <quad id="quad-liveranking-togglebutton" pos="0 0" size="4 4" z-index="3" opacity="0.9" colorize="ffffff" scriptevents="1"/>
+		 </frame>
 		 <frame id="frame-liveranking-content">
 			 <quad id="quad-liveranking-background" size="55 12" bgcolor="000000" opacity="0.6"/>
 			 <label id="label-liveranking-header" pos="27.5 -1" halign="center" textsize="2.5" textfont="GameFontExtraBold" textcolor="ffffff" text="LIVE RANKING"/>
@@ -112,13 +122,49 @@
 	 Boolean Finished;
 	 Integer Points;
 	 Integer RoundPoints;
+	 Boolean Finalist;
  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  // MARK: Functions
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-
+ /** Toggle LiveRanking UI
+  *
+  *	@param	_Display								Display the UI or not
+  *	@param	_UseAnimation						Use animation
+  */
+ Void ToggleUI(Boolean _Display, Boolean _UseAnimation) {
+	 declare CMlFrame Frame <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
+	 declare CMlFrame Frame_Content <=> (Frame.GetFirstChild("frame-liveranking-content") as CMlFrame);
+	 declare CMlQuad Quad_ToggleButton <=> (Frame.GetFirstChild("quad-liveranking-togglebutton") as CMlQuad);
+ 
+	 AnimMgr.Flush(Frame_Content);
+	 AnimMgr.Flush(Quad_ToggleButton);
+ 
+	 if (_Display) {
+		 Quad_ToggleButton.ImageUrl = Icons::C_Icon_128x128_Arrow_Left_Oblique;
+		 Frame_Content.Visible = True;
+ 
+		 if (_UseAnimation) {
+			 AnimMgr.Add(Quad_ToggleButton, "<a pos=\"0 "^Quad_ToggleButton.RelativePosition_V3.Y^ "\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
+			 AnimMgr.Add(Frame_Content, "<a pos=\"0 "^Frame_Content.RelativePosition_V3.Y^ "\" />", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
+		 } else {
+			 Quad_ToggleButton.RelativePosition_V3.X = 0.;
+			 Frame_Content.RelativePosition_V3.X = 0.;
+		 }
+	 } else {
+		 Quad_ToggleButton.ImageUrl = Icons::C_Icon_128x128_Arrow_Right_Oblique;
+		 if (_UseAnimation) {
+			 AnimMgr.Add(Quad_ToggleButton, "<a pos=\"-55 "^ Quad_ToggleButton.RelativePosition_V3.Y ^"\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
+			 AnimMgr.Add(Frame_Content, "<a pos=\"-55 "^ Frame_Content.RelativePosition_V3.Y ^"\" hidden=\"1\"/>", Now, 250, CAnimManager::EAnimManagerEasing::Linear);
+		 } else {
+			 Quad_ToggleButton.RelativePosition_V3.X = -55.;
+			 Frame_Content.RelativePosition_V3.X = -55.;
+			 Frame_Content.Visible = False;
+		 }
+	 }
+ }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  /** Transform delta time to pretty value
@@ -174,13 +220,26 @@
 
 	 //Set Points
 	 declare CMlLabel Label_Player_Points <=> (Frame_Player.GetFirstChild("label-player-points") as CMlLabel);
-	 declare PointsValue = TL::ToText(_PlayerState.Points);
 
-	 if(_PlayerState.Finished) {
-		PointsValue ^= " + " ^ TL::ToText(_PlayerState.RoundPoints);
+	 if (!_PlayerState.Finalist) {
+		 Label_Player_Points.TextColor = <1.0, 1.0, 1.0>;
+
+		 Label_Player_Points.TextFont = "Nadeo/Trackmania/BebasNeueRegular";
+
+		 declare PointsValue = TL::ToText(_PlayerState.Points);
+
+		 if(_PlayerState.Finished) {
+		 	PointsValue ^= " + " ^ TL::ToText(_PlayerState.RoundPoints);
+		 }
+
+		 Label_Player_Points.Value = PointsValue;
+	 } else {
+		 Label_Player_Points.TextColor = <1.0, 0.0, 0.0>;
+
+		 Label_Player_Points.TextFont = "GameFontExtraBold";
+
+		 Label_Player_Points.Value = "$iF$z";
 	 }
-
-	 Label_Player_Points.Value = PointsValue;
  
 	 // Set Spectate Button
 	 declare CMlQuad Quad_Player_Button <=> (Frame_Player.GetFirstChild("quad-player-button") as CMlQuad);
@@ -232,9 +291,13 @@
 
 	 declare Text PlayerNameSearch = TextEdit_Player_Search.Value;
 
+	 declare netread Integer Net_Spectate_LiveRanking_PointLimit for Teams[0];
+
 	 // Build Ranking array
 	 foreach (Score in Scores) {
 		 if (Score.User == Null) continue;
+
+		 if (Score.Points > Net_Spectate_LiveRanking_PointLimit) continue;
  
 		 declare K_PlayerState PlayerState = K_PlayerState {
 			 Name = Score.User.Name,
@@ -242,7 +305,8 @@
 			 ScoreId = Score.Id,
 			 IsNotPlaying = True,
 			 Points = Score.Points,
-			 RoundPoints = Score.RoundPoints
+			 RoundPoints = Score.RoundPoints,
+			 Finalist = Score.Points == Net_Spectate_LiveRanking_PointLimit
 		 };
  
 		 if (WarmupHelpers::IsWarmupActive(Teams[0])) {
@@ -422,6 +486,7 @@
 	 log("Init "^ ScriptName ^" v"^ Version);
 	 declare CMlFrame Frame_Global <=> (Page.GetFirstChild("frame-global") as CMlFrame);
 	 declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
+	 declare CMlQuad Quad_ToggleButton <=> (Page.GetFirstChild("quad-liveranking-togglebutton") as CMlQuad);
 
 	 declare CMlTextEdit TextEdit_Player_Search = (Frame_LiveRanking.GetFirstChild("textedit-player-search") as CMlTextEdit);
 
@@ -433,7 +498,10 @@
 
 
 	 declare netread Boolean Net_Spectate_LiveRanking_Display for Teams[0] = False;
- 
+
+	 declare persistent Boolean Spectate_LiveRanking_IsVisible for InputPlayer.User = True;
+	 ToggleUI(Spectate_LiveRanking_IsVisible, False);
+	 
 	 declare netread Integer Net_Spectate_LiveRanking_Serial for Teams[0];
 	 declare Integer Last_LiveRanking_Serial;
  
@@ -474,6 +542,10 @@
 							 declare Text Quad_Login for Event.Control = "";
 							 SpectateLogin(Quad_Login);
 							 TextEdit_Player_Search.Value = "";
+						 }
+						 case "quad-liveranking-togglebutton": {
+							 Spectate_LiveRanking_IsVisible = !Spectate_LiveRanking_IsVisible;
+							 ToggleUI(Spectate_LiveRanking_IsVisible, True);
 						 }
 					 }
 				 }

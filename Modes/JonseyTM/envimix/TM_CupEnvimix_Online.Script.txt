@@ -216,6 +216,7 @@ UIModules_SpectateScoresTable::DisplayLiveRanking(False);
 G_NbOfValidRounds = 0;
 UIModules_ScoresTable::DisplayRoundPoints(True);
 UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
+UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
 if (S_RandomiseCarOrderPerMap == True) {
 	ModelNames = RandomiseCarList(ModelNames);
 }
@@ -367,6 +368,7 @@ if (
 	Server_PointsLimit = S_PointsLimit;
 	Server_RoundsPerMap = S_RoundsPerMap;
 	UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
+	UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
 }
 ***
 
