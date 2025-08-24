@@ -1097,6 +1097,23 @@
  
 	 return False;
  }
+
+  /** Get number of rounds remaining
+  *
+  *	@return						Number of rounds remaining
+  */
+  Integer GetRoundsRemaining() {
+	declare Integer RemainingLives = GetRemainingLivesNb();
+	declare Integer PreviousLivesRemaining = GetRemainingLivesNb();
+	declare Integer RoundsRemaining = 0;
+	while (RemainingLives > 1) {
+		RoundsRemaining += 1;
+		RemainingLives -= GetLossOfLifeNb(S_RoundsWithoutElimination + 1, GetAliveScoresNb());
+		if (RemainingLives == PreviousLivesRemaining) return 0;
+		else PreviousLivesRemaining = RemainingLives;
+	}
+	return RoundsRemaining;
+  }
  
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  /// Update LiveRanking
@@ -1144,10 +1161,12 @@
 			 if (_CurrentRoundNb == -1) MatchInfo = "Warm Up";
 			 else if (S_EliminationMode == C_ElimMode_Rounds) MatchInfo = "Match Round "^ _CurrentRoundNb ^ " - Round "^ ML::Max(MB_GetValidRoundCount(), 1) ^"/"^ S_RoundsPerMap ^" of Map "^ MapNumber ^"/"^ MapList.count;
 			 else MatchInfo = "Round "^ ML::Max(MB_GetValidRoundCount(), 1) ^"/"^ S_RoundsPerMap ^ " - Map "^ MapNumber ^"/"^ MapList.count;
+			 MatchInfo ^= "\n" ^ GetRoundsRemaining() ^ " Rounds Remaining";
 		 } else if (_CurrentRoundNb == -1) {
 			 MatchInfo = "Warm Up";
 		 } else {
 			 MatchInfo = "Round "^ ML::Max(_CurrentRoundNb, 1);
+			 MatchInfo ^= "\n" ^ GetRoundsRemaining() ^ " Rounds Remaining";
 		 }
 		 ScoreTablesInfo ^= "\n"^ MatchInfo;
  
@@ -1263,8 +1282,8 @@
  <frame id="frame-global" hidden="1">
 	 <frame id="frame-matchinfo" pos="-160 80" hidden="1">
 		 <quad size="55 18" bgcolor="000000" opacity="0.6"/>
-		 <label id="label-matchinfo-name" pos="3 -7.8" size="49 6" valign="bottom" textsize="3.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
-		 <label id="label-matchinfo-info" pos="3 -8.8" size="49 8" textsize="1.3" maxline="3" linespacing="1.1" textfont="GameFontSemiBold" textcolor="ffffff" text="" />
+		 <label id="label-matchinfo-name" pos="3 -6.8" size="49 6" valign="bottom" textsize="3.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
+		 <label id="label-matchinfo-info" pos="3 -6.8" size="49 8" textsize="1.3" maxline="5" linespacing="1.1" textfont="GameFontSemiBold" textcolor="ffffff" text="" />
 	 </frame>
 	 <frame id=frame-golden-warning hidden="1" pos="-160 62">
 		 <quad size="55 5" bgcolor="000000" opacity="0.6"/>
