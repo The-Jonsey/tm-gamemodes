@@ -152,6 +152,7 @@ declare Integer Server_RoundsPerMap;
 
 ***Match_StartServer***
 ***
+Rounds_Settings_UseDefaultSpawnManagement = False;
 // Initialize mode
 Clans::SetClansNb(0);
 Scores::SaveInScore(Scores::C_Points_Match);
@@ -289,6 +290,24 @@ UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
 StateMgr::ForcePlayersStates([CupCommon_Const::C_State_Playing]);
 UIModules_SpectateScoresTable::UpdateLiveRanking();
 UIModules_SpectateScoresTable::DisplayLiveRanking(True);
+
+
+
+// Set the players who can spawn
+---Rounds_CanSpawn---
+
+// Spawn players for the race
+foreach (Player in Players) {
+	if (Player.Score == Null) continue;
+
+	if (Rounds_CanSpawn(Player) && CanSpawn(Player.Score)) {
+		---Rounds_SpawnPlayer---
+		Rounds_SetCanSpawn(Player.Score, False);
+		+++Rounds_PlayerSpawned+++
+	} else {
+		Race::StopSkipOutro(Player);
+	}
+}
 ***
 
 ***Match_StartPlayLoop***
@@ -308,20 +327,38 @@ foreach (Player in AllPlayers) {
 CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
 ***
 
-***Match_PlayLoop***
+***Rounds_PlayLoopSpawnPlayers***
 ***
-foreach (Event in PendingEvents) {
-	if (Event.Type == CSmModeEvent::EType::OnPlayerAdded) {
-		if (Event.Player != Null) {
+if (PlayersNbDead > 0) { //< Check for unspawned players only if at least one player is unspawned
+	foreach (Player in Players) {
+		if (Player.Score == Null) continue;
+
+		if (
+			Player.SpawnStatus == CSmPlayer::ESpawnStatus::NotSpawned &&
+			MB_RoundIsRunning() &&
+			Rounds_CanSpawn(Player) &&
+			CanSpawn(Player.Score)
+		) {
 			if (StartingCar == MapPlayerModelName) {
-				Event.Player.ForceModelId = NullId;
+				Player.ForceModelId = NullId;
 			}
 			else {
-				Event.Player.ForceModelId = ModelIds[StartingCar];
+				Player.ForceModelId = ModelIds[StartingCar];
 			}
+			---Rounds_SpawnPlayer---
+			Rounds_SetCanSpawn(Player.Score, False);
+			+++Rounds_PlayerSpawned+++
 		}
 	}
 }
+
+***
+
+***Match_PlayLoop***
+***
+
+---Rounds_PlayLoopSpawnPlayers---
+
 
 // Manage race events
 declare RacePendingEvents = Race::GetPendingEvents();
@@ -525,9 +562,6 @@ Boolean CanSpawn(CSmScore _Score) {
 
 	if (Scores::GetPlayerMatchPoints(_Score) > S_PointsLimit) {
 		return False;
-	} else if (MM_IsMatchServer()) {
-		declare Player <=> GetPlayer(_Score.User.Login);
-		return MM_PlayerIsAllowedToPlay(Player);
 	}
 
 	return True;
