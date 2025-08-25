@@ -534,11 +534,7 @@
 			} else {
 				Message ^= " not a life gain round";
 			}
-			foreach (Score in Scores) {
-				if (Score.User != Null) {
-					UIManager.GetUI(Score.User).SendChat(Message);
-				}
-			}
+			UIManager.UIAll.SendChat(Message);
 		}
 	}
  }
@@ -1104,13 +1100,12 @@
   */
   Integer GetRoundsRemaining() {
 	declare Integer RemainingLives = GetRemainingLivesNb();
-	declare Integer PreviousLivesRemaining = GetRemainingLivesNb();
 	declare Integer RoundsRemaining = 0;
 	while (RemainingLives > 1) {
 		RoundsRemaining += 1;
-		RemainingLives -= GetLossOfLifeNb(S_RoundsWithoutElimination + 1, GetAliveScoresNb());
-		if (RemainingLives == PreviousLivesRemaining) return 0;
-		else PreviousLivesRemaining = RemainingLives;
+		declare Integer LifeDelta = GetLossOfLifeNb(S_RoundsWithoutElimination + 1, GetAliveScoresNb());
+		if (LifeDelta == 0) return 0;
+		RemainingLives -= LifeDelta;
 	}
 	return RoundsRemaining;
   }
