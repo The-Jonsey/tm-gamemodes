@@ -112,6 +112,7 @@
  #Struct K_PlayerState {
 	 Ident ScoreId;
 	 Text Login;
+	 Text ClanTag;
 	 Text Name;
 	 Integer Rank;
 	 Integer CPNb;
@@ -214,7 +215,14 @@
  
 	 // Set Name
 	 declare CMlLabel Label_Player_Name <=> (Frame_Player.GetFirstChild("label-player-name") as CMlLabel);
-	 Label_Player_Name.Value = _PlayerState.Name;
+
+	 declare Text name = _PlayerState.Name;
+
+	 if (_PlayerState.ClanTag != "") {
+		name = "[" ^ _PlayerState.ClanTag ^ "$z] " ^ _PlayerState.Name;
+	 }
+
+	 Label_Player_Name.Value = name;
 	 Tools::FitLabelValue(Label_Player_Name, 1.5, .8, .1);
 
 
@@ -301,6 +309,7 @@
  
 		 declare K_PlayerState PlayerState = K_PlayerState {
 			 Name = Score.User.Name,
+			 ClanTag = Score.User.ClubTag,
 			 Login = Score.User.Login,
 			 ScoreId = Score.Id,
 			 IsNotPlaying = True,
