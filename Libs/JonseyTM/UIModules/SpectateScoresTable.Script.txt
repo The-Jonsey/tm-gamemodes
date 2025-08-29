@@ -219,7 +219,7 @@
 	 declare Text name = _PlayerState.Name;
 
 	 if (_PlayerState.ClanTag != "") {
-		name = "[" ^ _PlayerState.ClanTag ^ "$z] " ^ _PlayerState.Name;
+		name = "[" ^ _PlayerState.ClanTag ^ "$>$z] " ^ _PlayerState.Name;
 	 }
 
 	 Label_Player_Name.Value = name;
