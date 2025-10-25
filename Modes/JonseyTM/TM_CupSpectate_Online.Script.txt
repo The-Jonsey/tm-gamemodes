@@ -1,4 +1,4 @@
-#Extends "Modes/TrackMania/TM_Cup_Online.Script.txt"
+#Extends "Modes/JonseyTM/TM_GranaDyCup_Online.Script.txt"
 
  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
  // MARK: Libraries

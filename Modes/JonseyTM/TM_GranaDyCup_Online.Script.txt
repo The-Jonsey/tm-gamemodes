@@ -4,7 +4,7 @@
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
 #Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
-#Const	Version							"2025-08-25+1"
+#Const	Version							"1.1.0+2024-10-28"
 #Const	ScriptName					"Modes/TrackMania/TM_Cup_Online.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -21,8 +21,6 @@
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/Checkpoint_Server.Script.txt" as UIModules_Checkpoint
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/PauseMenuOnline_Server.Script.txt" as UIModules_PauseMenu_Online
 #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/BigMessage_Server.Script.txt" as UIModules_BigMessage
-#Include "Libs/Nadeo/Trackmania/Modes/Rounds/UIModules/SmallScoresTable_Server.Script.txt" as UIModules_SmallScoresTable
-#Include "Libs/JonseyTM/UIModules/SpectateScoresTable.Script.txt" as UIModules_SpectateScoresTable
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Settings
@@ -34,13 +32,9 @@
 #Setting S_WarmUpNb 0	as _("Number of warm up")
 #Setting S_WarmUpDuration 0 as _("Duration of one warm up")
 #Setting S_WarmUpTimeout -1 as _("Warm up timeout")
-#Setting S_StadiumCarEnabled True as _("Should the stadium car be enabled")
-#Setting S_SnowCarEnabled True as _("Should the snow car be enabled")
-#Setting S_RallyCarEnabled True as _("Should the rally car be enabled")
-#Setting S_DesertCarEnabled True as _("Should the desert car be enabled")
-#Setting S_RandomiseCarOrderPerMap False as _("Should the car order be randomised on each map")
 #Setting S_AllowPlayingPostWin False as _("Allow Players to keep playing post winning")
 #Setting S_ScoringExcludedPlayers "" as _("Comma Seperated AccountIds of players that should be excluded from scoring")
+
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -52,9 +46,7 @@
 #Const C_ManiaAppUrl "file://Media/ManiaApps/Nadeo/Trackmania/Modes/Cup.Script.txt" //< Url of the mania app
 #Const C_FakeUsersNb 0
 
-#Const C_Text_NextRoundTimer _("%1Next round in %2s")
-
-#Const C_UploadRecord False
+#Const C_UploadRecord True
 #Const C_DisplayRecordGhost False
 #Const C_DisplayRecordMedal False
 #Const C_CelebrateRecordGhost True
@@ -126,8 +118,6 @@ UIModules_Sign16x9Small::SetScoreMode(UIModules_Sign16x9Small::C_ScoreMode_Point
 // Hide SM Overlay
 UIManager.UIAll.OverlayHideSpectatorInfos = True;
 UIManager.UIAll.OverlayHideCountdown = True;
-UIModules::UnloadModule(UIModules_SmallScoresTable::GetId());
-UIModules_SpectateScoresTable::LoadManialinks();
 ***
 
 ***Match_Yield***
@@ -153,7 +143,6 @@ declare Integer Server_RoundsPerMap;
 
 ***Match_StartServer***
 ***
-Rounds_Settings_UseDefaultSpawnManagement = False;
 // Initialize mode
 Clans::SetClansNb(0);
 Scores::SaveInScore(Scores::C_Points_Match);
@@ -175,42 +164,9 @@ Server_PointsLimit = S_PointsLimit;
 Server_RoundsPerMap = S_RoundsPerMap;
 ***
 
-***Match_InitMatch***
-***
-
-declare Ident[Text] ModelIds;
-
-ModelIds["DefaultPlayerModel"] = ItemList_Add("DefaultPlayerModel");
-ModelIds["CarSport"] = ItemList_Add("CarSport");
-ModelIds["CarSnow"] = ItemList_Add("CarSnow");
-ModelIds["CarRally"] = ItemList_Add("CarRally");
-ModelIds["CarDesert"] = ItemList_Add("CarDesert");
-
- declare Text[] ModelNames = [
- ];
-
- if (S_StadiumCarEnabled) {
-	ModelNames.add("CarSport");
- }
-
- if (S_SnowCarEnabled) {
-	ModelNames.add("CarSnow");
- }
-
- if (S_DesertCarEnabled) {
-	ModelNames.add("CarDesert");
- }
-
- if (S_RallyCarEnabled) {
-	ModelNames.add("CarRally");
- }
-declare Integer CarIndex = 0;
-***
-
 ***Match_StartMatch***
 ***
 UIModules_ScoresTable::SetCustomPoints([]);
-UIModules_SpectateScoresTable::DisplayLiveRanking(False);
 ***
 
 ***Match_InitMap***
@@ -218,10 +174,6 @@ UIModules_SpectateScoresTable::DisplayLiveRanking(False);
 G_NbOfValidRounds = 0;
 UIModules_ScoresTable::DisplayRoundPoints(True);
 UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
-UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
-if (S_RandomiseCarOrderPerMap == True) {
-	ModelNames = RandomiseCarList(ModelNames);
-}
 ***
 
 ***Match_StartMap***
@@ -252,63 +204,10 @@ foreach (Score in Scores) {
 }
 ***
 
-***Match_InitRound***
-***
-declare Text StartingCar;
-if (ModelNames.count > 1) {
-    StartingCar = ModelNames[CarIndex];
-} else if (ModelNames.count == 1) {
-    StartingCar = ModelNames[0];
-} else {
-    StartingCar = MapPlayerModelName;
-}
-foreach (Player in Players) {
-	if (StartingCar == MapPlayerModelName) {
-		Player.ForceModelId = NullId;
-	}
-	else {
-		Player.ForceModelId = ModelIds[StartingCar];
-	}
-}
-UIModules_BigMessage::SetMessage("Next Car: " ^ StartingCar, 3000);
-UIModules_BigMessage::SetOffset(<0., -40.>);
-UIManager.UIAll.BigMessageSound = CUIConfig::EUISound::Default;
-UIManager.UIAll.BigMessageSoundVariant = 0;
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "3");
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "2");
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "1");
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = "";
-StartTime = Now + Race::C_SpawnDuration;
-***
-
 ***Match_StartRound***
 ***
 UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
 StateMgr::ForcePlayersStates([CupCommon_Const::C_State_Playing]);
-UIModules_SpectateScoresTable::UpdateLiveRanking();
-UIModules_SpectateScoresTable::DisplayLiveRanking(True);
-
-
-
-// Set the players who can spawn
----Rounds_CanSpawn---
-
-// Spawn players for the race
-foreach (Player in Players) {
-	if (Player.Score == Null) continue;
-
-	if (Rounds_CanSpawn(Player) && CanSpawn(Player.Score)) {
-		---Rounds_SpawnPlayer---
-		Rounds_SetCanSpawn(Player.Score, False);
-		+++Rounds_PlayerSpawned+++
-	} else {
-		Race::StopSkipOutro(Player);
-	}
-}
 ***
 
 ***Match_StartPlayLoop***
@@ -328,43 +227,11 @@ foreach (Player in AllPlayers) {
 CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
 ***
 
-***Rounds_PlayLoopSpawnPlayers***
-***
-if (PlayersNbDead > 0) { //< Check for unspawned players only if at least one player is unspawned
-	foreach (Player in Players) {
-		if (Player.Score == Null) continue;
-
-		if (
-			Player.SpawnStatus == CSmPlayer::ESpawnStatus::NotSpawned &&
-			MB_RoundIsRunning() &&
-			Rounds_CanSpawn(Player) &&
-			CanSpawn(Player.Score)
-		) {
-			if (StartingCar == MapPlayerModelName) {
-				Player.ForceModelId = NullId;
-			}
-			else {
-				Player.ForceModelId = ModelIds[StartingCar];
-			}
-			---Rounds_SpawnPlayer---
-			Rounds_SetCanSpawn(Player.Score, False);
-			+++Rounds_PlayerSpawned+++
-		}
-	}
-}
-
-***
-
 ***Match_PlayLoop***
 ***
-
----Rounds_PlayLoopSpawnPlayers---
-
-
 // Manage race events
 declare RacePendingEvents = Race::GetPendingEvents();
 foreach (Event in RacePendingEvents) {
-	UIModules_SpectateScoresTable::UpdateLiveRanking();
 	Race::ValidEvent(Event);
 
 	// Waypoint
@@ -406,13 +273,11 @@ if (
 	Server_PointsLimit = S_PointsLimit;
 	Server_RoundsPerMap = S_RoundsPerMap;
 	UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, G_NbOfValidRounds);
-	UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
 }
 ***
 
 ***Match_EndRound***
 ***
-UIModules_SpectateScoresTable::DisplayLiveRanking(False);
 Race::StopSkipOutroAll();
 EndTime = -1;
 StateMgr::ForcePlayersStates([CupCommon_Const::C_State_Waiting]);
@@ -422,17 +287,13 @@ if (Semver::Compare(XmlRpc::GetApiVersion(), ">=", "2.1.1")) {
 	Scores::XmlRpc_SendScores(Scores::C_Section_PreEndRound, "");
 }
 
-if (Round_ForceEndRound || Round_SkipPauseRound) {
+if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 	// Cancel points
 	foreach (Score in Scores) {
 		Scores::SetPlayerRoundPoints(Score, 0);
 	}
 	// Do not launch the forced end round sequence after a pause
 	if (!Round_SkipPauseRound) {
-		CarIndex += 1;
-		if (CarIndex >= ModelIds.count - 1) {
-			CarIndex = 0;
-		}
 		ForcedEndRoundSequence();
 	}
 	MB_SetValidRound(False);
@@ -447,10 +308,6 @@ if (Round_ForceEndRound || Round_SkipPauseRound) {
 	// Add them to the total scores
 	declare Boolean RoundIsValid = ComputeScores();
 	if (RoundIsValid) {
-	    CarIndex += 1;
-        if (CarIndex >= ModelIds.count - 1) {
-            CarIndex = 0;
-        }
 		G_NbOfValidRounds += 1;
 	} else {
 		MB_SetValidRound(False);
@@ -563,6 +420,9 @@ Boolean CanSpawn(CSmScore _Score) {
 
 	if (Scores::GetPlayerMatchPoints(_Score) > S_PointsLimit && !S_AllowPlayingPostWin) {
 		return False;
+	} else if (MM_IsMatchServer()) {
+		declare Player <=> GetPlayer(_Score.User.Login);
+		return MM_PlayerIsAllowedToPlay(Player);
 	}
 
 	return True;
@@ -728,14 +588,4 @@ Boolean MatchIsOver() {
 	if (NbOfScoreWinners >= S_NbOfWinners || NbOfPlayerWinners >= PlayerWinnersLimit) return True;
 
 	return False;
-}
-
-Text[] RandomiseCarList(Text[] _CarList) {
-	declare Text[] NewCarList = [];
-	while (NewCarList.count < _CarList.count) {
-		declare Integer RandomIndex = ML::Rand(0, _CarList.count - 1);
-		if (NewCarList.exists(_CarList[RandomIndex])) continue;
-		NewCarList.add(_CarList[RandomIndex]);
-	}
-	return NewCarList;
 }

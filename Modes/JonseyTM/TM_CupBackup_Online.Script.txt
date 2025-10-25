@@ -1,0 +1,31 @@
+#Extends "Modes/JonseyTM/TM_CupSpectate_Online.Script.txt"
+
+#Include "Libs/Nsgr/Common/ScoreBackup.Script.txt" as ScoreBackup
+
+#Setting S_SavePointsURL "" as "Backup points to URL"
+#Setting S_LoadPointsURL "" as "Load points from URL. Change this value to something that is not empty initiate a load."
+
+declare Text G_LoadPointsFromUrl;
+
+***Match_PlayLoop*** // Ideally this would be Match_Yield aswell but that doesn't support Globals
+***
+if (S_SavePointsURL != ScoreBackup::GetBackupURL()) ScoreBackup::SetBackupURL(S_SavePointsURL);
+if (S_LoadPointsURL != G_LoadPointsFromUrl) {
+    if (S_LoadPointsURL != "") {
+        ScoreBackup::TryLoad(S_LoadPointsURL);
+    }
+    G_LoadPointsFromUrl = S_LoadPointsURL;
+}
+***
+
+***Match_Yield***
+***
+ScoreBackup::Yield();
+***
+
+***Match_EndRound***
+***
+ScoreBackup::TrySave();
+***
+
+Void Dummy() {}
