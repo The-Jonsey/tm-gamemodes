@@ -635,7 +635,7 @@ Void ComputeLatestRaceScores() {
 				Scores::SetPlayerRoundPoints(Score, Points);
 			}
 			I += 1;
-		} else {
+		} else if (IsScoringPlayer(Score)) {
 			Scores::SetPlayerRoundPoints(Score, 0);
 		}
         if (IsScoringPlayer(Score)) {
