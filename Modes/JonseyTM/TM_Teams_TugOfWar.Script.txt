@@ -1,11 +1,11 @@
 /**
- *	TM_Teams_Online mode
+ *    TM_Teams_Online mode
  */
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
-#Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
-#Const	Version							"2025-05-23"
-#Const	ScriptName					"Modes/TrackMania/TM_Teams_TugOfWar.Script.txt"
+#Const    CompatibleMapTypes    "TrackMania\\TM_Race,TM_Race"
+#Const    Version                            "2025-05-23"
+#Const    ScriptName                    "Modes/TrackMania/TM_Teams_TugOfWar.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Libraries
@@ -35,7 +35,7 @@
 #Setting S_MaxRoundDelta 5.0 as _("Max swing that can happen in a single round")
 #Setting S_MaxRounds -1 as _("Max rounds that can occur on a single map, -1 or 0 means infinite")
 
- #Setting S_ScriptEnvironment "development"
+#Setting S_ScriptEnvironment "development"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
@@ -585,10 +585,10 @@ TeamsCommonLib::AfterPodiumSequence();
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player finished the race or not
  *
- *	@param	_Score								Player's score
- *	@param	_HasFinished					True if player finished race
+ *    @param    _Score                                Player's score
+ *    @param    _HasFinished                    True if player finished race
  */
- Void SetFinishedRace(CSmScore _Score, Boolean _HasFinished) {
+Void SetFinishedRace(CSmScore _Score, Boolean _HasFinished) {
     declare Knockout_FinishedRace for _Score = False;
     Knockout_FinishedRace = _HasFinished;
 }
@@ -596,8 +596,8 @@ TeamsCommonLib::AfterPodiumSequence();
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player finished the race or not
  *
- *	@param	_Score								Player's score
- *	@return												True if player finished race
+ *    @param    _Score                                Player's score
+ *    @return                                                True if player finished race
  */
 Boolean GetFinishedRace(CSmScore _Score) {
     declare Knockout_FinishedRace for _Score = False;
@@ -632,9 +632,9 @@ Integer TeamAhead(Real _Time) {
     return 0;
 }
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- /// Update LiveRanking Info
- Void UpdateLiveRankingInfo() {
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+/// Update LiveRanking Info
+Void UpdateLiveRankingInfo() {
     declare netwrite Integer Net_LiveRanking_Serial for Teams[0];
     Net_LiveRanking_Serial += 1;
 }
@@ -678,18 +678,18 @@ Void LoadUI() {
         </frame>
     </frame>
     <script><!--
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // MARK: Libraries
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- #Include "TextLib" as TL
- #Include "MathLib" as ML
- #Include "ColorLib" as CL
- #Include "Libs/Nadeo/CMGame/Utils/Icons.Script.txt" as Icons
- #Include "Libs/Nadeo/CMGame/Utils/Tools.Script.txt" as Tools
- #Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/WarmupHelpers_Client.Script.txt" as WarmupHelpers
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Libraries
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+#Include "TextLib" as TL
+#Include "MathLib" as ML
+#Include "ColorLib" as CL
+#Include "Libs/Nadeo/CMGame/Utils/Icons.Script.txt" as Icons
+#Include "Libs/Nadeo/CMGame/Utils/Tools.Script.txt" as Tools
+#Include "Libs/Nadeo/TMGame/Modes/Base/UIModules/WarmupHelpers_Client.Script.txt" as WarmupHelpers
 //  #Include "Libs/Nadeo/TMGame/Modes/Teams/TeamsCommon.Script.txt" as TeamsCommonLib
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Constants
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 
@@ -697,10 +697,10 @@ Void LoadUI() {
 #Const ScriptName "TugOfWar"
 #Const C_LinesNb_Top 3
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // MARK: Structures
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- #Struct K_PlayerState {
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Structures
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+#Struct K_PlayerState {
     Ident ScoreId;
     Text Login;
     Text Name;
@@ -713,15 +713,15 @@ Void LoadUI() {
     Boolean Finished;
     Integer Clan;
     CScore Score;
- }
+}
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- /** Transform delta time to pretty value
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+/** Transform delta time to pretty value
   *
-  *	@param	_Time													Display the UI or not
-  *	@return 															Human readable delta time
+  *    @param    _Time                                                    Display the UI or not
+  *    @return                                                             Human readable delta time
   */
- Text TimeToText(Integer _Time) {
+Text TimeToText(Integer _Time) {
     if (_Time < 1000) {
         return TL::FormatReal(_Time / 1000., 3, False, False);
     }
@@ -734,12 +734,12 @@ Void LoadUI() {
         return TL::FormatReal(TimeInSeconds, 1, False, False);
     }
     return TL::ToText(ML::FloorInteger(TimeInSeconds));
- }
+}
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 
- Real GetCompletionPercentage(Real _Delta, Real _MaxDelta) {
+Real GetCompletionPercentage(Real _Delta, Real _MaxDelta) {
     if (_MaxDelta == 0) {
         return 0.0;
     }
@@ -753,7 +753,7 @@ Void LoadUI() {
     return CompletionPercentage;
 }
 
- Void UpdateQuads(Real _Delta, Real _MaxTimeDelta, CMlFrame _Frame, Text _BlueQuadName, Text _RedQuadName, Real _MidBarSize, Integer _TravelTime) {
+Void UpdateQuads(Real _Delta, Real _MaxTimeDelta, CMlFrame _Frame, Text _BlueQuadName, Text _RedQuadName, Real _MidBarSize, Integer _TravelTime) {
     declare CMlQuad Quad_Red <=> (_Frame.GetFirstChild(_RedQuadName) as CMlQuad);
     declare CMlQuad Quad_Blue <=> (_Frame.GetFirstChild(_BlueQuadName) as CMlQuad);
 
@@ -774,13 +774,13 @@ Void LoadUI() {
     }
   }
 
- Void UpdateTopBar(Real _Map_Delta, Real _MaxTimeDelta) {
+Void UpdateTopBar(Real _Map_Delta, Real _MaxTimeDelta) {
     declare CMlFrame Frame <=> (Page.GetFirstChild("frame-global") as CMlFrame);
 
     UpdateQuads(_Map_Delta, _MaxTimeDelta, Frame, "quad-blue", "quad-red", 30.0, 250);
   }
 
- Void UpdateProgressBar(Real _PrevValue, Real _Map_Delta, Real _MaxTimeDelta) {
+Void UpdateProgressBar(Real _PrevValue, Real _Map_Delta, Real _MaxTimeDelta) {
     declare CMlFrame Frame <=> (Page.GetFirstChild("frame-global") as CMlFrame);
     declare CMlQuad Quad_ProgressBar <=> (Frame.GetFirstChild("quad-progress-bar") as CMlQuad);
 
@@ -836,7 +836,7 @@ Void LoadUI() {
 
         }
     }
- }
+}
  
 
 Void UpdateLabel(Real _Map_Delta) {
@@ -875,9 +875,9 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
     Label_Red.Value = _RedMapWins ^ "";
 }
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // Update Live Ranking UI
- Void UpdateRanking(Real _MaxTimeDelta, Integer _FinishTimeout) {
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// Update Live Ranking UI
+Void UpdateRanking(Real _MaxTimeDelta, Integer _FinishTimeout) {
     // map Score Id to Player Id
     declare Ident[Ident] ScoreIdToPlayerId;
         foreach (Player in Players) {
@@ -965,14 +965,14 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
                     Team1Players += 1;
                 } else {
                     Team2Players += 1; 
-                }	
+                }    
                 HandledScores.add(PlayerStateRO.Score);
                 if (CPNb == GlobalLastCpNb) {
                     if (PlayerStateRO.Clan == 1) {
                         TotalTeam1Time += CPTime;
                     } else {
                         TotalTeam2Time += CPTime; 
-                    }		
+                    }        
                     continue;
                 }
                 declare Integer BaseTime = GlobalLastCPTime;
@@ -1023,7 +1023,7 @@ Void UpdateMapWinsCounters(Integer _BlueMapWins, Integer _RedMapWins) {
     Label_Red_Delta.Value = TimeToText(TotalTeam2Time);
 }
 
- Void ResetLiveRanking() {
+Void ResetLiveRanking() {
     declare CMlFrame Frame <=> (Page.GetFirstChild("frame-liveranking-content") as CMlFrame);
 
     UpdateQuads(0.0, 5.0, Frame, "quad-live-blue", "quad-live-red", 27.5, 250);
@@ -1051,15 +1051,15 @@ main() {
     declare Real PrevValue = 0.0;
 
 
-     declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
+    declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
       
-     declare netread Integer Net_LiveRanking_Serial for Teams[0];
-     declare Integer Last_LiveRanking_Serial;
+    declare netread Integer Net_LiveRanking_Serial for Teams[0];
+    declare Integer Last_LiveRanking_Serial;
 
-     declare netread Integer FinishTimeout for Teams[0] = -1;
+    declare netread Integer FinishTimeout for Teams[0] = -1;
 
 
-     declare Boolean UpdateLiveRanking = True;
+    declare Boolean UpdateLiveRanking = True;
 
     while (True) {
         yield;
@@ -1081,12 +1081,12 @@ main() {
             LastRoundFin = Net_RoundFin;
         }
 
-         if (Last_LiveRanking_Serial != Net_LiveRanking_Serial) {
+        if (Last_LiveRanking_Serial != Net_LiveRanking_Serial) {
             Last_LiveRanking_Serial = Net_LiveRanking_Serial;
             UpdateLiveRanking = True;
-         }
+        }
 
-         if (WarmupHelpers::IsWarmupActive(Teams[0])) {
+        if (WarmupHelpers::IsWarmupActive(Teams[0])) {
             Frame_LiveRanking.Visible = False;
         } else {
             Frame_LiveRanking.Visible = True;

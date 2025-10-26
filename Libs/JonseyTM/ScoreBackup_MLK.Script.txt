@@ -3,16 +3,16 @@
 #Include "TextLib" as TL
 
 #Struct K_LivesJson {
-	Integer LivesRemaining;
-	Integer LivesGained;
+    Integer LivesRemaining;
+    Integer LivesGained;
 }
 
 #Struct K_ScoreJson {
-	K_LivesJson[Text] scores;
+    K_LivesJson[Text] scores;
 }
 
 #Struct K_Webhook {
-	K_ScoreJson content;
+    K_ScoreJson content;
 }
 
 // GLOBALS
@@ -21,99 +21,99 @@ declare Http::K_Request G_SaveRequest;
 declare Http::K_Request G_LoadRequest;
 
 K_ScoreJson CreateScoreJSON() {
-	declare K_ScoreJson ScoreJson = K_ScoreJson{};
-	foreach (Score in Scores) {
-		if (Score.User == Null) continue;
-		declare K_LivesJson LivesJson = K_LivesJson{};
-		declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for Score;
-	 	declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
-		LivesJson.LivesRemaining = Net_MultiLivesKnockout_RemainingLives;
-		LivesJson.LivesGained = Net_MultiLivesKnockout_GainedLives;
-		ScoreJson.scores[Score.User.WebServicesUserId] = LivesJson;
-	}
-	return ScoreJson;
+    declare K_ScoreJson ScoreJson = K_ScoreJson{};
+    foreach (Score in Scores) {
+        if (Score.User == Null) continue;
+        declare K_LivesJson LivesJson = K_LivesJson{};
+        declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for Score;
+        declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
+        LivesJson.LivesRemaining = Net_MultiLivesKnockout_RemainingLives;
+        LivesJson.LivesGained = Net_MultiLivesKnockout_GainedLives;
+        ScoreJson.scores[Score.User.WebServicesUserId] = LivesJson;
+    }
+    return ScoreJson;
 }
 
 Void ApplyScoreJSON(K_ScoreJson _ScoreJson) {
-	log(_ScoreJson.tojson());
-	Scores::Clear();
-	foreach (WebServicesUserId => Points in _ScoreJson.scores) {
-		foreach (Score in Scores) {
-			if (Score.User == Null || Score.User.WebServicesUserId != WebServicesUserId) continue;
-			log(Points);
-			declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for Score;
-		 	declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
-			declare netwrite Boolean Net_MultiLivesKnockout_IsRegistered for Score;
-			Net_MultiLivesKnockout_RemainingLives = Points.LivesRemaining;
-			Net_MultiLivesKnockout_GainedLives = Points.LivesGained;
-			Net_MultiLivesKnockout_IsRegistered = True;
-			break;
-		}
-	}
-	UIManager.UIAll.SendChat("Applied scores from backup!");
+    log(_ScoreJson.tojson());
+    Scores::Clear();
+    foreach (WebServicesUserId => Points in _ScoreJson.scores) {
+        foreach (Score in Scores) {
+            if (Score.User == Null || Score.User.WebServicesUserId != WebServicesUserId) continue;
+            log(Points);
+            declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for Score;
+            declare netwrite Integer Net_MultiLivesKnockout_GainedLives for Score;
+            declare netwrite Boolean Net_MultiLivesKnockout_IsRegistered for Score;
+            Net_MultiLivesKnockout_RemainingLives = Points.LivesRemaining;
+            Net_MultiLivesKnockout_GainedLives = Points.LivesGained;
+            Net_MultiLivesKnockout_IsRegistered = True;
+            break;
+        }
+    }
+    UIManager.UIAll.SendChat("Applied scores from backup!");
 }
 
 Void TrySave() {
-	if (G_BackupURL == "") {
-		log("Skipping points backup as URL is empty.");
-		return;
-	}
-	declare K_ScoreJson ScoreJson = CreateScoreJSON();
-	declare K_Webhook Webhook = K_Webhook{content = ScoreJson};
-	declare Text HttpRequestBody = Webhook.tojson();
-	if (Http::IsInitialized(G_SaveRequest)) {
-		G_SaveRequest = Http::Destroy(G_SaveRequest);
-	}
-	G_SaveRequest = Http::CreatePost(G_BackupURL, HttpRequestBody, ["Content-Type" => "application/json"]);
-	log("New Scores request at " ^ Now);
+    if (G_BackupURL == "") {
+        log("Skipping points backup as URL is empty.");
+        return;
+    }
+    declare K_ScoreJson ScoreJson = CreateScoreJSON();
+    declare K_Webhook Webhook = K_Webhook{content = ScoreJson};
+    declare Text HttpRequestBody = Webhook.tojson();
+    if (Http::IsInitialized(G_SaveRequest)) {
+        G_SaveRequest = Http::Destroy(G_SaveRequest);
+    }
+    G_SaveRequest = Http::CreatePost(G_BackupURL, HttpRequestBody, ["Content-Type" => "application/json"]);
+    log("New Scores request at " ^ Now);
 }
 
 Void TryLoad(Text _URL) {
-	if (Http::IsInitialized(G_LoadRequest)) {
-		G_LoadRequest = Http::Destroy(G_LoadRequest);
-	}
-	G_LoadRequest = Http::CreateGet(_URL, []);
+    if (Http::IsInitialized(G_LoadRequest)) {
+        G_LoadRequest = Http::Destroy(G_LoadRequest);
+    }
+    G_LoadRequest = Http::CreateGet(_URL, []);
 }
 
 Void SetBackupURL(Text _URL) {
-	G_BackupURL = _URL;
+    G_BackupURL = _URL;
 }
 
 Text GetBackupURL() {
-	return G_BackupURL;
+    return G_BackupURL;
 }
 
 Void Yield() {
-	if (Http::IsInitialized(G_SaveRequest)) {
-		G_SaveRequest = Http::Update(G_SaveRequest);
-		if (!Http::IsRunning(G_SaveRequest)) {
-			if (Http::IsSuccess(G_SaveRequest)) {
-				log("Scores successfully saved.");
-			} else {
-				log("Failed saving scores.");
-			}
-			G_SaveRequest = Http::Destroy(G_SaveRequest);
-		}
-	}
+    if (Http::IsInitialized(G_SaveRequest)) {
+        G_SaveRequest = Http::Update(G_SaveRequest);
+        if (!Http::IsRunning(G_SaveRequest)) {
+            if (Http::IsSuccess(G_SaveRequest)) {
+                log("Scores successfully saved.");
+            } else {
+                log("Failed saving scores.");
+            }
+            G_SaveRequest = Http::Destroy(G_SaveRequest);
+        }
+    }
 
-	if (Http::IsInitialized(G_LoadRequest)) {
-		G_LoadRequest = Http::Update(G_LoadRequest);
-		if (!Http::IsRunning(G_LoadRequest)) {
-			if (Http::IsSuccess(G_LoadRequest)) {
-				if (TL::Find("scores", Http::GetResult(G_LoadRequest), True, True)) {
-					declare K_Webhook NewScoreJson;
-					declare Text Response = Http::GetResult(G_LoadRequest);
-					log(Response);
-					NewScoreJson.fromjson(Response);
-					ApplyScoreJSON(NewScoreJson.content);
-					log("Successfully loaded scores");
-				} else {
-					log("Score load mismatch.");
-				}
-			} else {
-				log("Failed loading scores.");
-			}
-			G_LoadRequest = Http::Destroy(G_LoadRequest);
-		}
-	}
+    if (Http::IsInitialized(G_LoadRequest)) {
+        G_LoadRequest = Http::Update(G_LoadRequest);
+        if (!Http::IsRunning(G_LoadRequest)) {
+            if (Http::IsSuccess(G_LoadRequest)) {
+                if (TL::Find("scores", Http::GetResult(G_LoadRequest), True, True)) {
+                    declare K_Webhook NewScoreJson;
+                    declare Text Response = Http::GetResult(G_LoadRequest);
+                    log(Response);
+                    NewScoreJson.fromjson(Response);
+                    ApplyScoreJSON(NewScoreJson.content);
+                    log("Successfully loaded scores");
+                } else {
+                    log("Score load mismatch.");
+                }
+            } else {
+                log("Failed loading scores.");
+            }
+            G_LoadRequest = Http::Destroy(G_LoadRequest);
+        }
+    }
 }

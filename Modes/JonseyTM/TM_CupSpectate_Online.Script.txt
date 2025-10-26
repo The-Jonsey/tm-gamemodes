@@ -1,61 +1,61 @@
 #Extends "Modes/JonseyTM/TM_GranaDyCup_Online.Script.txt"
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // MARK: Libraries
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Libraries
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 
 #Include "Libs/Nadeo/Trackmania/Modes/Rounds/UIModules/SmallScoresTable_Server.Script.txt" as UIModules_SmallScoresTable
 #Include "Libs/JonseyTM/UIModules/SpectateScoresTable.Script.txt" as UIModules_SpectateScoresTable
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // MARK: Constants
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Constants
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- // MARK: Extends
- // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- ***Match_AfterLoadHud***
- ***
- UIModules::UnloadModule(UIModules_SmallScoresTable::GetId());
- UIModules_SpectateScoresTable::LoadManialinks();
- ***
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+// MARK: Extends
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+***Match_AfterLoadHud***
+***
+UIModules::UnloadModule(UIModules_SmallScoresTable::GetId());
+UIModules_SpectateScoresTable::LoadManialinks();
+***
 
- ***Match_InitServer***
- ***
- declare Integer Spectate_PointsLimit;
- ***
+***Match_InitServer***
+***
+declare Integer Spectate_PointsLimit;
+***
 
- ***Match_StartServer***
- ***
- Spectate_PointsLimit = S_PointsLimit;
- ***
+***Match_StartServer***
+***
+Spectate_PointsLimit = S_PointsLimit;
+***
 
- ***Match_StartMatch***
- ***
- UIModules_SpectateScoresTable::DisplayLiveRanking(False);
- UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
- ***
+***Match_StartMatch***
+***
+UIModules_SpectateScoresTable::DisplayLiveRanking(False);
+UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
+***
 
- ***Match_StartRound***
- ***
- UIModules_SpectateScoresTable::UpdateLiveRanking();
- UIModules_SpectateScoresTable::DisplayLiveRanking(True);
- ***
+***Match_StartRound***
+***
+UIModules_SpectateScoresTable::UpdateLiveRanking();
+UIModules_SpectateScoresTable::DisplayLiveRanking(True);
+***
 
- ***Match_PlayLoop***
- ***
- foreach (Event in RacePendingEvents) {
+***Match_PlayLoop***
+***
+foreach (Event in RacePendingEvents) {
     UIModules_SpectateScoresTable::UpdateLiveRanking();
- }
+}
 
- if (
-	Spectate_PointsLimit != S_PointsLimit) {
-	Spectate_PointsLimit = S_PointsLimit;
-	UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
- }
- ***
+if (
+    Spectate_PointsLimit != S_PointsLimit) {
+    Spectate_PointsLimit = S_PointsLimit;
+    UIModules_SpectateScoresTable::UpdatePointLimit(S_PointsLimit);
+}
+***
 
- ***Match_EndRound***
- ***
- UIModules_SpectateScoresTable::DisplayLiveRanking(False);
- ***
+***Match_EndRound***
+***
+UIModules_SpectateScoresTable::DisplayLiveRanking(False);
+***

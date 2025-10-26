@@ -1,11 +1,11 @@
 /**
- *	Rounds mode
+ *    Rounds mode
  */
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
-#Const	CompatibleMapTypes	"TrackMania\\TM_Race,TM_Race"
-#Const	Version							"2025-08-02+1"
-#Const	ScriptName					"Modes/TrackMania/TM_RoundsEnvimix_Online.Script.txt"
+#Const    CompatibleMapTypes    "TrackMania\\TM_Race,TM_Race"
+#Const    Version                            "2025-08-02+1"
+#Const    ScriptName                    "Modes/TrackMania/TM_RoundsEnvimix_Online.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // MARK: Libraries
@@ -26,8 +26,8 @@
 #Setting S_FinishTimeout -1 as _("Finish timeout")
 #Setting S_RoundsPerMap -1 as _("Number of rounds per track") ///< Number of round to play on one map before going to the next one
 #Setting S_MapsPerMatch -1 as _("Number of tracks per match") ///< Number of maps to play before finishing the match
-#Setting S_UseTieBreak True as _("Use tie-break")	///< Continue to play the map until the tie is broken
-#Setting S_WarmUpNb 0	as _("Number of warm up")
+#Setting S_UseTieBreak True as _("Use tie-break")    ///< Continue to play the map until the tie is broken
+#Setting S_WarmUpNb 0    as _("Number of warm up")
 #Setting S_WarmUpDuration 0 as _("Duration of one warm up")
 #Setting S_WarmUpTimeout -1 as _("Warm up timeout")
 #Setting S_StadiumCarEnabled True as _("Should the stadium car be enabled")
@@ -115,13 +115,13 @@ UIManager.UIAll.OverlayHideCountdown = True;
 ***Match_Yield***
 ***
 foreach (Event in PendingEvents) {
-	switch (Event.Type) {
-		// Initialize players when they join the server
-		case CSmModeEvent::EType::OnPlayerAdded: {
-			StateMgr::InitializePlayer(Event.Player);
-			CarRank::InitializePlayer(Event.Player);
-		}
-	}
+    switch (Event.Type) {
+        // Initialize players when they join the server
+        case CSmModeEvent::EType::OnPlayerAdded: {
+            StateMgr::InitializePlayer(Event.Player);
+            CarRank::InitializePlayer(Event.Player);
+        }
+    }
 }
 
 StateMgr::Yield();
@@ -142,15 +142,15 @@ Scores::SaveInScore(Scores::C_Points_Match);
 StateMgr::ForcePlayersStates([StateMgr::C_State_Waiting]);
 WarmUp::SetAvailability(True);
 Race::SetupRecord(
-	MenuConsts::C_ScopeType_Season,
-	MenuConsts::C_ScopeType_PersonalBest,
-	MenuConsts::C_GameMode_Rounds,
-	"",
-	C_UploadRecord,
-	C_DisplayRecordGhost,
-	C_DisplayRecordMedal,
-	C_CelebrateRecordGhost,
-	C_CelebrateRecordMedal
+    MenuConsts::C_ScopeType_Season,
+    MenuConsts::C_ScopeType_PersonalBest,
+    MenuConsts::C_GameMode_Rounds,
+    "",
+    C_UploadRecord,
+    C_DisplayRecordGhost,
+    C_DisplayRecordMedal,
+    C_CelebrateRecordGhost,
+    C_CelebrateRecordMedal
 );
 
 Server_PointsLimit = S_PointsLimit - 1;
@@ -160,34 +160,34 @@ Server_MapsPerMatch = S_MapsPerMatch - 1;
 
 ***Match_InitMatch***
 ***
- declare Ident[Text] ModelIds;
+declare Ident[Text] ModelIds;
 
- ModelIds["DefaultPlayerModel"] = ItemList_Add("DefaultPlayerModel");
- ModelIds["CarSport"] = ItemList_Add("CarSport");
- ModelIds["CarSnow"] = ItemList_Add("CarSnow");
- ModelIds["CarRally"] = ItemList_Add("CarRally");
- ModelIds["CarDesert"] = ItemList_Add("CarDesert");
+ModelIds["DefaultPlayerModel"] = ItemList_Add("DefaultPlayerModel");
+ModelIds["CarSport"] = ItemList_Add("CarSport");
+ModelIds["CarSnow"] = ItemList_Add("CarSnow");
+ModelIds["CarRally"] = ItemList_Add("CarRally");
+ModelIds["CarDesert"] = ItemList_Add("CarDesert");
 
- declare Text[] ModelNames = [
- ];
+declare Text[] ModelNames = [
+];
 
- if (S_StadiumCarEnabled) {
-	ModelNames.add("CarSport");
- }
+if (S_StadiumCarEnabled) {
+    ModelNames.add("CarSport");
+}
 
- if (S_SnowCarEnabled) {
-	ModelNames.add("CarSnow");
- }
+if (S_SnowCarEnabled) {
+    ModelNames.add("CarSnow");
+}
 
- if (S_DesertCarEnabled) {
-	ModelNames.add("CarDesert");
- }
+if (S_DesertCarEnabled) {
+    ModelNames.add("CarDesert");
+}
 
- if (S_RallyCarEnabled) {
-	ModelNames.add("CarRally");
- }
- ModelNames = RandomiseCarList(ModelNames);
- declare Integer CarIndex = 0;
+if (S_RallyCarEnabled) {
+    ModelNames.add("CarRally");
+}
+ModelNames = RandomiseCarList(ModelNames);
+declare Integer CarIndex = 0;
 ***
 
 
@@ -198,7 +198,7 @@ declare Boolean Map_Skipped;
 
 UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, S_MapsPerMatch, Map_ValidRoundsNb);
 if (S_RandomiseCarOrderPerMap == True) {
-	ModelNames = RandomiseCarList(ModelNames);
+    ModelNames = RandomiseCarList(ModelNames);
 }
 ***
 
@@ -226,12 +226,12 @@ if (ModelNames.count > 1) {
     StartingCar = MapPlayerModelName;
 }
 foreach (Player in Players) {
-	if (StartingCar == MapPlayerModelName) {
-		Player.ForceModelId = NullId;
-	}
-	else {
-		Player.ForceModelId = ModelIds[StartingCar];
-	}
+    if (StartingCar == MapPlayerModelName) {
+        Player.ForceModelId = NullId;
+    }
+    else {
+        Player.ForceModelId = ModelIds[StartingCar];
+    }
 }
 UIModules_BigMessage::SetMessage("Next Car: " ^ StartingCar, 3000);
 UIModules_BigMessage::SetOffset(<0., -40.>);
@@ -263,63 +263,63 @@ CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
 ***Match_PlayLoop***
 ***
 foreach (Event in PendingEvents) {
-	if (Event.Type == CSmModeEvent::EType::OnPlayerAdded) {
-		if (Event.Player != Null) {
-			if (StartingCar == MapPlayerModelName) {
-				Event.Player.ForceModelId = NullId;
-			}
-			else {
-				Event.Player.ForceModelId = ModelIds[StartingCar];
-			}
-		}
-	}
+    if (Event.Type == CSmModeEvent::EType::OnPlayerAdded) {
+        if (Event.Player != Null) {
+            if (StartingCar == MapPlayerModelName) {
+                Event.Player.ForceModelId = NullId;
+            }
+            else {
+                Event.Player.ForceModelId = ModelIds[StartingCar];
+            }
+        }
+    }
 }
 
 // Manage race events
 declare RacePendingEvents = Race::GetPendingEvents();
 foreach (Event in RacePendingEvents) {
-	Race::ValidEvent(Event);
+    Race::ValidEvent(Event);
 
-	// Waypoint
-	if (Event.Type == Events::C_Type_Waypoint) {
-		CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
-		if (Event.Player != Null) {
-			if (Event.IsEndRace) {
-				Scores::UpdatePlayerBestRaceIfBetter(Event.Player);
-				Scores::UpdatePlayerBestLapIfBetter(Event.Player);
-				Scores::UpdatePlayerPrevRace(Event.Player);
-				ComputeLatestRaceScores();
-				Race::SortScores(Race::C_Sort_TotalPoints);
+    // Waypoint
+    if (Event.Type == Events::C_Type_Waypoint) {
+        CarRank::ThrottleUpdate(CarRank::C_SortCriteria_CurrentRace);
+        if (Event.Player != Null) {
+            if (Event.IsEndRace) {
+                Scores::UpdatePlayerBestRaceIfBetter(Event.Player);
+                Scores::UpdatePlayerBestLapIfBetter(Event.Player);
+                Scores::UpdatePlayerPrevRace(Event.Player);
+                ComputeLatestRaceScores();
+                Race::SortScores(Race::C_Sort_TotalPoints);
 
-				// Start the countdown if it's the first player to finish
-				if (EndTime <= 0) {
-					EndTime = GetFinishTimeout(S_FinishTimeout);
-				}
-			}
-			if (Event.IsEndLap) {
-				Scores::UpdatePlayerBestLapIfBetter(Event.Player);
-			}
-		}
-	}
+                // Start the countdown if it's the first player to finish
+                if (EndTime <= 0) {
+                    EndTime = GetFinishTimeout(S_FinishTimeout);
+                }
+            }
+            if (Event.IsEndLap) {
+                Scores::UpdatePlayerBestLapIfBetter(Event.Player);
+            }
+        }
+    }
 }
 
 // Manage mode events
 foreach (Event in PendingEvents) {
-	if (Event.HasBeenPassed || Event.HasBeenDiscarded) continue;
-	Events::Invalid(Event);
+    if (Event.HasBeenPassed || Event.HasBeenDiscarded) continue;
+    Events::Invalid(Event);
 }
 
 // Server info change
 if (
-	Server_PointsLimit != S_PointsLimit ||
-	Server_RoundsPerMap != S_RoundsPerMap ||
-	Server_MapsPerMatch != S_MapsPerMatch
+    Server_PointsLimit != S_PointsLimit ||
+    Server_RoundsPerMap != S_RoundsPerMap ||
+    Server_MapsPerMatch != S_MapsPerMatch
 ) {
-	Server_PointsLimit = S_PointsLimit;
-	Server_RoundsPerMap = S_RoundsPerMap;
-	Server_MapsPerMatch = S_MapsPerMatch;
+    Server_PointsLimit = S_PointsLimit;
+    Server_RoundsPerMap = S_RoundsPerMap;
+    Server_MapsPerMatch = S_MapsPerMatch;
 
-	UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, S_MapsPerMatch, Map_ValidRoundsNb);
+    UpdateScoresTableFooter(S_PointsLimit, S_RoundsPerMap, S_MapsPerMatch, Map_ValidRoundsNb);
 }
 ***
 
@@ -331,46 +331,46 @@ StateMgr::ForcePlayersStates([StateMgr::C_State_Waiting]);
 CarRank::Update(CarRank::C_SortCriteria_CurrentRace);
 
 if (Semver::Compare(XmlRpc::GetApiVersion(), ">=", "2.1.1")) {
-	Scores::XmlRpc_SendScores(Scores::C_Section_PreEndRound, "");
+    Scores::XmlRpc_SendScores(Scores::C_Section_PreEndRound, "");
 }
 
 if (Round_ForceEndRound || Round_SkipPauseRound) {
-	// Cancel points
-	foreach (Score in Scores) {
-		Scores::SetPlayerRoundPoints(Score, 0);
-	}
-	// Do not launch the forced end round sequence after a pause
-	if (!Round_SkipPauseRound) {
-		CarIndex += 1;
-		if (CarIndex >= ModelIds.count - 1) {
-			CarIndex = 0;
-		}
-		ForcedEndRoundSequence();
-	}
-	MB_SetValidRound(False);
+    // Cancel points
+    foreach (Score in Scores) {
+        Scores::SetPlayerRoundPoints(Score, 0);
+    }
+    // Do not launch the forced end round sequence after a pause
+    if (!Round_SkipPauseRound) {
+        CarIndex += 1;
+        if (CarIndex >= ModelIds.count - 1) {
+            CarIndex = 0;
+        }
+        ForcedEndRoundSequence();
+    }
+    MB_SetValidRound(False);
 } else {
     CarIndex += 1;
     if (CarIndex >= ModelIds.count - 1) {
-		CarIndex = 0;
+        CarIndex = 0;
     }
-	Map_ValidRoundsNb += 1;
-	// Get the last round points
-	ComputeLatestRaceScores();
-	Race::SortScores(Race::C_Sort_TotalPoints);
-	UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::ForcedVisible;
-	UIManager.UIAll.UISequence = CUIConfig::EUISequence::EndRound;
-	MB_Sleep(3000);
-	// Add them to the total scores
-	ComputeScores();
-	Race::SortScores(Race::C_Sort_TotalPoints);
-	MB_Sleep(3000);
-	UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
-	UIManager.UIAll.UISequence = CUIConfig::EUISequence::Playing;
+    Map_ValidRoundsNb += 1;
+    // Get the last round points
+    ComputeLatestRaceScores();
+    Race::SortScores(Race::C_Sort_TotalPoints);
+    UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::ForcedVisible;
+    UIManager.UIAll.UISequence = CUIConfig::EUISequence::EndRound;
+    MB_Sleep(3000);
+    // Add them to the total scores
+    ComputeScores();
+    Race::SortScores(Race::C_Sort_TotalPoints);
+    MB_Sleep(3000);
+    UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
+    UIManager.UIAll.UISequence = CUIConfig::EUISequence::Playing;
 
-	if (MapIsOver(S_UseTieBreak, S_PointsLimit, Map_ValidRoundsNb, S_RoundsPerMap)) {
-		Map_Skipped = False;
-		MB_StopMap();
-	}
+    if (MapIsOver(S_UseTieBreak, S_PointsLimit, Map_ValidRoundsNb, S_RoundsPerMap)) {
+        Map_Skipped = False;
+        MB_StopMap();
+    }
 }
 ***
 
@@ -385,16 +385,16 @@ declare CSmScore Winner <=> Scores::GetBestPlayer(Scores::C_Sort_MatchPoints);
 Scores::SetPlayerWinner(Winner);
 
 if (!MB_MatchIsRunning()) {
-	// Compute ranking for tracking
-	declare Integer PreviousPoints = 0;
-	declare Integer Rank = 0;
-	foreach (Key => Score in Scores) {
-		if (Key == 0 || Scores::GetPlayerMatchPoints(Score) < PreviousPoints) {
-			PreviousPoints = Scores::GetPlayerMatchPoints(Score);
-			Rank = Key + 1;
-		}
-		Tracking::SendPlayerMatchResult(UIManager, Score.User, Rank, Winner == Score && Scores.count > 1);
-	}
+    // Compute ranking for tracking
+    declare Integer PreviousPoints = 0;
+    declare Integer Rank = 0;
+    foreach (Key => Score in Scores) {
+        if (Key == 0 || Scores::GetPlayerMatchPoints(Score) < PreviousPoints) {
+            PreviousPoints = Scores::GetPlayerMatchPoints(Score);
+            Rank = Key + 1;
+        }
+        Tracking::SendPlayerMatchResult(UIManager, Score.User, Rank, Winner == Score && Scores.count > 1);
+    }
 }
 ***
 
@@ -404,191 +404,191 @@ if (!MB_MatchIsRunning()) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Update the scores table footer text
  *
- *	@param	_PointsLimit							The points limit
- *	@param	_RoundsPerMap							The number of rounds per map
- *	@param	_MapsPerMatch							The number of maps per match
- *	@param	_ValidRoundsNb						Number of valid rounds played
+ *    @param    _PointsLimit                            The points limit
+ *    @param    _RoundsPerMap                            The number of rounds per map
+ *    @param    _MapsPerMatch                            The number of maps per match
+ *    @param    _ValidRoundsNb                        Number of valid rounds played
  */
 Void UpdateScoresTableFooter(Integer _PointsLimit, Integer _RoundsPerMap, Integer _MapsPerMatch, Integer _ValidRoundsNb) {
-	declare Text[] Parts;
-	declare Text Message = "";
-	if (_PointsLimit > 0) {
-		if (Parts.count > 0) Message ^= "\n";
-		Message ^= """%{{{Parts.count + 1}}}{{{_PointsLimit}}}""";
-		//L16N [Rounds] Number of points to reach to win the match.
-		Parts.add(_("Points limit : "));
-	}
-	if (_RoundsPerMap > 0) {
-		if (Parts.count > 0) Message ^= "\n";
-		Message ^= """%{{{Parts.count + 1}}}{{{ML::Min(_ValidRoundsNb+1, _RoundsPerMap)}}}/{{{_RoundsPerMap}}}""";
-		//L16N [Rounds] Number of rounds played during the track.
-		Parts.add(_("Rounds : "));
-	}
-	if (_MapsPerMatch > 0) {
-		if (Parts.count > 0) Message ^= "\n";
-		Message ^= """%{{{Parts.count + 1}}}{{{MB_GetMapCount()}}}/{{{_MapsPerMatch}}}""";
-		//L16N [Rounds] Number of tracks played during the match.
-		Parts.add(_("Tracks : "));
-	}
+    declare Text[] Parts;
+    declare Text Message = "";
+    if (_PointsLimit > 0) {
+        if (Parts.count > 0) Message ^= "\n";
+        Message ^= """%{{{Parts.count + 1}}}{{{_PointsLimit}}}""";
+        //L16N [Rounds] Number of points to reach to win the match.
+        Parts.add(_("Points limit : "));
+    }
+    if (_RoundsPerMap > 0) {
+        if (Parts.count > 0) Message ^= "\n";
+        Message ^= """%{{{Parts.count + 1}}}{{{ML::Min(_ValidRoundsNb+1, _RoundsPerMap)}}}/{{{_RoundsPerMap}}}""";
+        //L16N [Rounds] Number of rounds played during the track.
+        Parts.add(_("Rounds : "));
+    }
+    if (_MapsPerMatch > 0) {
+        if (Parts.count > 0) Message ^= "\n";
+        Message ^= """%{{{Parts.count + 1}}}{{{MB_GetMapCount()}}}/{{{_MapsPerMatch}}}""";
+        //L16N [Rounds] Number of tracks played during the match.
+        Parts.add(_("Tracks : "));
+    }
 
-	switch (Parts.count) {
-		case 0: UIModules_ScoresTable::SetFooterInfo(Message);
-		case 1: UIModules_ScoresTable::SetFooterInfo(TL::Compose(Message, Parts[0]));
-		case 2: UIModules_ScoresTable::SetFooterInfo(TL::Compose(Message, Parts[0], Parts[1]));
-		case 3: UIModules_ScoresTable::SetFooterInfo(TL::Compose(Message, Parts[0], Parts[1], Parts[2]));
-	}
+    switch (Parts.count) {
+        case 0: UIModules_ScoresTable::SetFooterInfo(Message);
+        case 1: UIModules_ScoresTable::SetFooterInfo(TL::Compose(Message, Parts[0]));
+        case 2: UIModules_ScoresTable::SetFooterInfo(TL::Compose(Message, Parts[0], Parts[1]));
+        case 3: UIModules_ScoresTable::SetFooterInfo(TL::Compose(Message, Parts[0], Parts[1], Parts[2]));
+    }
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Get the time left to the players to finish the round after the first player
  *
- *	@return 		The time left in ms
+ *    @return         The time left in ms
  */
 Integer GetFinishTimeout(Integer _FinishTimeout) {
-	declare Integer FinishTimeout = 0;
+    declare Integer FinishTimeout = 0;
 
-	if (_FinishTimeout >= 0) {
-		FinishTimeout = _FinishTimeout * 1000;
-	} else {
-		FinishTimeout = 5000;
-		if (Map.TMObjective_IsLapRace && Race::GetLapsNb() > 0 && Map.TMObjective_NbLaps > 0) {
-			FinishTimeout += ((Map.TMObjective_AuthorTime / Map.TMObjective_NbLaps) * Race::GetLapsNb()) / 6;
-		} else {
-			FinishTimeout += Map.TMObjective_AuthorTime / 6;
-		}
-	}
+    if (_FinishTimeout >= 0) {
+        FinishTimeout = _FinishTimeout * 1000;
+    } else {
+        FinishTimeout = 5000;
+        if (Map.TMObjective_IsLapRace && Race::GetLapsNb() > 0 && Map.TMObjective_NbLaps > 0) {
+            FinishTimeout += ((Map.TMObjective_AuthorTime / Map.TMObjective_NbLaps) * Race::GetLapsNb()) / 6;
+        } else {
+            FinishTimeout += Map.TMObjective_AuthorTime / 6;
+        }
+    }
 
-	return Now + FinishTimeout;
+    return Now + FinishTimeout;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /// Compute the latest race scores
 Void ComputeLatestRaceScores() {
-	Race::SortScores(Race::C_Sort_PrevRaceTime);
+    Race::SortScores(Race::C_Sort_PrevRaceTime);
 
-	// Points distributed between all players
-	declare Integer I = 0;
-	declare Integer[] PointsRepartition = PointsRepartition::GetPointsRepartition();
-	foreach (Score in Race::GetPrevRaceRanking()) {
-		if (Scores::GetPlayerPrevRaceTime(Score) > 0) {
-			declare Integer Points = 0;
-			if (PointsRepartition.count > 0) {
-				if (PointsRepartition.existskey(I)) {
-					Points = PointsRepartition[I];
-				} else {
-					Points = PointsRepartition[PointsRepartition.count - 1];
-				}
-			}
-			Scores::SetPlayerRoundPoints(Score, Points);
-			I += 1;
-		} else {
-			Scores::SetPlayerRoundPoints(Score, 0);
-		}
-	}
+    // Points distributed between all players
+    declare Integer I = 0;
+    declare Integer[] PointsRepartition = PointsRepartition::GetPointsRepartition();
+    foreach (Score in Race::GetPrevRaceRanking()) {
+        if (Scores::GetPlayerPrevRaceTime(Score) > 0) {
+            declare Integer Points = 0;
+            if (PointsRepartition.count > 0) {
+                if (PointsRepartition.existskey(I)) {
+                    Points = PointsRepartition[I];
+                } else {
+                    Points = PointsRepartition[PointsRepartition.count - 1];
+                }
+            }
+            Scores::SetPlayerRoundPoints(Score, Points);
+            I += 1;
+        } else {
+            Scores::SetPlayerRoundPoints(Score, 0);
+        }
+    }
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /// Compute the map scores
 Void ComputeScores() {
-	Scores::EndRound();
+    Scores::EndRound();
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Check if the points limit was reached
  *
- *	@param	_UseTieBreak							Prevent ties or not
- *	@param	_PointsLimit							Number of points to get to win the match
+ *    @param    _UseTieBreak                            Prevent ties or not
+ *    @param    _PointsLimit                            Number of points to get to win the match
  *
- *	@return														C_PointsLimit_Reached if the points limit is reached
- *																		C_PointsLimit_Tie if there is a tie
- *																		C_PointsLimit_NotReached if the points limit is not reached
+ *    @return                                                        C_PointsLimit_Reached if the points limit is reached
+ *                                                                        C_PointsLimit_Tie if there is a tie
+ *                                                                        C_PointsLimit_NotReached if the points limit is not reached
  */
 Integer PointsLimitReached(Boolean _UseTieBreak, Integer _PointsLimit) {
-	declare Integer MaxScore = -1;
-	declare Boolean Tie = False;
-	foreach (Score in Scores) {
-		declare Integer Points = Scores::GetPlayerMatchPoints(Score);
-		if (Points > MaxScore) {
-			MaxScore = Points;
-			Tie = False;
-		} else if (Points == MaxScore) {
-			Tie = True;
-		}
-	}
+    declare Integer MaxScore = -1;
+    declare Boolean Tie = False;
+    foreach (Score in Scores) {
+        declare Integer Points = Scores::GetPlayerMatchPoints(Score);
+        if (Points > MaxScore) {
+            MaxScore = Points;
+            Tie = False;
+        } else if (Points == MaxScore) {
+            Tie = True;
+        }
+    }
 
-	if (_UseTieBreak && Tie) return C_PointsLimit_Tie; //< There is a tie and it is not allowed
-	if (_PointsLimit > 0 && MaxScore >= _PointsLimit) return C_PointsLimit_Reached; //< There is a points limit and it is reached
-	return C_PointsLimit_NotReached; //< There is no points limit or the points limit is not reached
+    if (_UseTieBreak && Tie) return C_PointsLimit_Tie; //< There is a tie and it is not allowed
+    if (_PointsLimit > 0 && MaxScore >= _PointsLimit) return C_PointsLimit_Reached; //< There is a points limit and it is reached
+    return C_PointsLimit_NotReached; //< There is no points limit or the points limit is not reached
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Check if we should go to the next map
  *
- *	@param	_UseTieBreak							Prevent ties or not
- *	@param	_PointsLimit							Number of points to get to win the match
- *	@param	_ValidRoundsNb						Number of valid rounds played
- *	@param	_RoundsPerMap							Number of rounds to play to complete the map
+ *    @param    _UseTieBreak                            Prevent ties or not
+ *    @param    _PointsLimit                            Number of points to get to win the match
+ *    @param    _ValidRoundsNb                        Number of valid rounds played
+ *    @param    _RoundsPerMap                            Number of rounds to play to complete the map
  *
- *	@return		True if it is the case, false otherwise
+ *    @return        True if it is the case, false otherwise
  */
 Boolean MapIsOver(Boolean _UseTieBreak, Integer _PointsLimit, Integer _ValidRoundsNb, Integer _RoundsPerMap) {
-	declare Integer PointsLimitReached = PointsLimitReached(_UseTieBreak, _PointsLimit);
+    declare Integer PointsLimitReached = PointsLimitReached(_UseTieBreak, _PointsLimit);
 
-	Log::Log("""[Rounds] MapIsOver() > _UseTieBreak: {{{_UseTieBreak}}} | _PointsLimit: {{{_PointsLimit}}} | _ValidRoundsNb: {{{_ValidRoundsNb}}} | _RoundsPerMap: {{{_RoundsPerMap}}} | PointsLimitReached: {{{PointsLimitReached}}}""");
+    Log::Log("""[Rounds] MapIsOver() > _UseTieBreak: {{{_UseTieBreak}}} | _PointsLimit: {{{_PointsLimit}}} | _ValidRoundsNb: {{{_ValidRoundsNb}}} | _RoundsPerMap: {{{_RoundsPerMap}}} | PointsLimitReached: {{{PointsLimitReached}}}""");
 
-	if (PointsLimitReached == C_PointsLimit_Reached) return True; //< There is a points limit and it is reached
-	if (_RoundsPerMap > 0 && _ValidRoundsNb >= _RoundsPerMap) return True; //< There is a rounds limit and it is reached
+    if (PointsLimitReached == C_PointsLimit_Reached) return True; //< There is a points limit and it is reached
+    if (_RoundsPerMap > 0 && _ValidRoundsNb >= _RoundsPerMap) return True; //< There is a rounds limit and it is reached
 
-	return False;
+    return False;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Check if we should go to the next match
  *
- *	@param	_UseTieBreak							Prevent ties or not
- *	@param	_PointsLimit							Number of points to get to win the match
- *	@param	_MapsPerMatch							Number of maps to play to complete a match
- *	@param	_RoundsPerMap							Number of rounds to play to complete the map
+ *    @param    _UseTieBreak                            Prevent ties or not
+ *    @param    _PointsLimit                            Number of points to get to win the match
+ *    @param    _MapsPerMatch                            Number of maps to play to complete a match
+ *    @param    _RoundsPerMap                            Number of rounds to play to complete the map
  *
- *	@return		True if it is the case, false otherwise
+ *    @return        True if it is the case, false otherwise
  */
 Boolean MatchIsOver(Boolean _UseTieBreak, Integer _PointsLimit, Integer _MapCount, Integer _MapsPerMatch, Integer _RoundsPerMap, Boolean _MapSkipped) {
-	declare Integer PointsLimitReached = PointsLimitReached(_UseTieBreak, _PointsLimit);
+    declare Integer PointsLimitReached = PointsLimitReached(_UseTieBreak, _PointsLimit);
 
-	Log::Log("""[Rounds] MatchIsOver() > _UseTieBreak: {{{_UseTieBreak}}} | _PointsLimit: {{{_PointsLimit}}} | _MapCount: {{{_MapCount}}} | _MapsPerMatch: {{{_MapsPerMatch}}} | _RoundsPerMap: {{{_RoundsPerMap}}} | PointsLimitReached: {{{PointsLimitReached}}} | _MapSkipped : {{{_MapSkipped}}}""");
+    Log::Log("""[Rounds] MatchIsOver() > _UseTieBreak: {{{_UseTieBreak}}} | _PointsLimit: {{{_PointsLimit}}} | _MapCount: {{{_MapCount}}} | _MapsPerMatch: {{{_MapsPerMatch}}} | _RoundsPerMap: {{{_RoundsPerMap}}} | PointsLimitReached: {{{PointsLimitReached}}} | _MapSkipped : {{{_MapSkipped}}}""");
 
-	// If there is a point limit and it is reached, stop the match
-	if (PointsLimitReached == C_PointsLimit_Reached) {
-		return True;
-	}
-	// If there is an explicit maps limit ...
-	else if (_MapsPerMatch >= 1) {
-		if (
-			(_MapCount >= _MapsPerMatch && PointsLimitReached != C_PointsLimit_Tie) || //< ... stop the match if the maps limit is reached and the match is not a tie
-			(_MapSkipped && _MapsPerMatch == 1 && _MapCount >= _MapsPerMatch) //< ... stop the match if the map was skipped and the match is played on only one map
-		) {
-			return True;
-		}
-	}
-	// If there is a rounds limit but no maps limit, continue to play until another limit is reached
-	else if (_RoundsPerMap >= 1) {
-		return False;
-	}
-	// If there is neither a points limit nor a rounds limit, always stop the match at the end of the first map, even if there is a tie
-	else {
-		return True;
-	}
+    // If there is a point limit and it is reached, stop the match
+    if (PointsLimitReached == C_PointsLimit_Reached) {
+        return True;
+    }
+    // If there is an explicit maps limit ...
+    else if (_MapsPerMatch >= 1) {
+        if (
+            (_MapCount >= _MapsPerMatch && PointsLimitReached != C_PointsLimit_Tie) || //< ... stop the match if the maps limit is reached and the match is not a tie
+            (_MapSkipped && _MapsPerMatch == 1 && _MapCount >= _MapsPerMatch) //< ... stop the match if the map was skipped and the match is played on only one map
+        ) {
+            return True;
+        }
+    }
+    // If there is a rounds limit but no maps limit, continue to play until another limit is reached
+    else if (_RoundsPerMap >= 1) {
+        return False;
+    }
+    // If there is neither a points limit nor a rounds limit, always stop the match at the end of the first map, even if there is a tie
+    else {
+        return True;
+    }
 
-	// In all other cases continue to play
-	return False;
+    // In all other cases continue to play
+    return False;
 }
 
 Text[] RandomiseCarList(Text[] _CarList) {
-	declare Text[] NewCarList = [];
-	while (NewCarList.count < _CarList.count) {
-		declare Integer RandomIndex = ML::Rand(0, _CarList.count - 1);
-		if (NewCarList.exists(_CarList[RandomIndex])) continue;
-		NewCarList.add(_CarList[RandomIndex]);
-	}
-	return NewCarList;
+    declare Text[] NewCarList = [];
+    while (NewCarList.count < _CarList.count) {
+        declare Integer RandomIndex = ML::Rand(0, _CarList.count - 1);
+        if (NewCarList.exists(_CarList[RandomIndex])) continue;
+        NewCarList.add(_CarList[RandomIndex]);
+    }
+    return NewCarList;
 }

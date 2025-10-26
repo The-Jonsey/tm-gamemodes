@@ -10,18 +10,18 @@
 
 ***Match_PlayLoop*** // Ideally this would be Match_Yield aswell but that doesn't support Globals
 ***
- if (S_ECircuitManiaToken != ECircuitManiaUplink::GetECircuitManiaToken()) ECircuitManiaUplink::SetECircuitManiaToken(S_ECircuitManiaToken);
- if (TL::Split(",", S_AdminAccountIds) != ECircuitManiaUplink::GetServerAdminIds()) ECircuitManiaUplink::SetServerAdminIds(TL::Split(",", S_AdminAccountIds));
+if (S_ECircuitManiaToken != ECircuitManiaUplink::GetECircuitManiaToken()) ECircuitManiaUplink::SetECircuitManiaToken(S_ECircuitManiaToken);
+if (TL::Split(",", S_AdminAccountIds) != ECircuitManiaUplink::GetServerAdminIds()) ECircuitManiaUplink::SetServerAdminIds(TL::Split(",", S_AdminAccountIds));
 ***
 
 ***Match_Yield***
 ***
- ECircuitManiaUplink::Yield();
+ECircuitManiaUplink::Yield();
 ***
 
 ***Match_EndRound***
 ***
- if (!Round_ForceEndRound && !Round_SkipPauseRound && !Round_Skipped) {
-    ECircuitManiaUplink::TrySave(MB_GetRoundCount(), Map.MapInfo.MapUid, Race::GetPrevRaceRanking());
- }
+if (!Round_ForceEndRound && !Round_SkipPauseRound && !Round_Skipped) {
+   ECircuitManiaUplink::TrySave(MB_GetRoundCount(), Map.MapInfo.MapUid, Race::GetPrevRaceRanking());
+}
 ***
