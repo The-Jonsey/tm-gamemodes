@@ -4,7 +4,7 @@
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
 #Const    CompatibleMapTypes    "TrackMania\\TM_Race,TM_Race"
-#Const    Version                            "2025-05-23"
+#Const    Version                            "2025-10-26"
 #Const    ScriptName                    "Modes/TrackMania/TM_Teams_TugOfWar.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
