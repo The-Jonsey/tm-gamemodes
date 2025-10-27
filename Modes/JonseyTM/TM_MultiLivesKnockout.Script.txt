@@ -52,7 +52,7 @@
 
 #Setting S_ScriptEnvironment "production"
 
-#Setting S_AdminAccountIds "" as _("Comma Seperated Account ID's for admins who can enable next round life gain")
+#Setting S_AdminAccountIds "7a170f66-1ff1-49f6-94e5-9d492dccc412,05477e79-25fd-48c2-84c7-e1621aa46517" as _("Comma Seperated Account ID's for admins who can enable next round life gain")
 
 #Setting S_MaxGainedLives 0 as _("Maximum lives that can be gained in Golden Rounds, 0 is infinite")
 
@@ -273,8 +273,6 @@ declare Integer Match_CurrentRoundNb;
 declare Boolean Match_RegistrationIsOpen;
 declare Boolean CurrentRoundLifeGain;
 declare Text[] AdminAccountIds = [
-    "7a170f66-1ff1-49f6-94e5-9d492dccc412", // JonseyTM
-    "05477e79-25fd-48c2-84c7-e1621aa46517" // GranaDy.
 ];
 if (S_AdminAccountIds != "") {
     AdminAccountIds = TL::Split(",", S_AdminAccountIds);
@@ -342,8 +340,6 @@ if (WillMapBeOver(NextRoundNb)) {
 }
 Net_NextRoundLifeGain = IsRestoreLifeRound(NextRoundNb, False);
 declare Text[] AdminAccountIds = [
-    "7a170f66-1ff1-49f6-94e5-9d492dccc412", // JonseyTM
-    "05477e79-25fd-48c2-84c7-e1621aa46517" // GranaDy.
 ];
 if (S_AdminAccountIds != "") {
     AdminAccountIds = TL::Split(",", S_AdminAccountIds);
@@ -519,8 +515,8 @@ foreach (Event in PendingEvents) {
 }
 
 foreach (Event in UIManager.PendingEvents) {
+    declare netwrite Text[] Net_AdminAccountIds for Teams[0];
     if (Event.CustomEventType == "NextRoundLifeGainEvent") {
-        declare netwrite Text[] Net_AdminAccountIds for Teams[0];
         declare Integer NextRoundNb = MB_GetValidRoundCount() + 1;
         if (MapIsOver(NextRoundNb - 1)) {
             NextRoundNb = 1;
@@ -535,6 +531,27 @@ foreach (Event in UIManager.PendingEvents) {
                 Message ^= " not a life gain round";
             }
             UIManager.UIAll.SendChat(Message);
+        }
+
+    } else if (Event.CustomEventType == "PlayerOverrideRemoveLife") {
+        if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
+            for (Score in Scores) {
+                if (Score.User.Login == Event.CustomEventData[0]) {
+                    UIManager.UIAll.SendChat("Removing life from player: " ^ Score.User.Name);
+                    ForceConsumeLife(Score);
+                    UpdateLiveRanking();
+                }
+            }
+        }
+    } else if (Event.CustomEventType == "PlayerOverrideAddLife") {
+        if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
+            for (Score in Scores) {
+                if (Score.User.Login == Event.CustomEventData[0]) {
+                    UIManager.UIAll.SendChat("Adding life to player: " ^ Score.User.Name);
+                    ForceRestoreLife(Score);
+                    UpdateLiveRanking();
+                }
+            }
         }
     }
 }
@@ -777,6 +794,27 @@ Void RestoreLife(CSmScore _Score) {
     if (S_MaxGainedLives > 0 && Net_MultiLivesKnockout_GainedLives >= S_MaxGainedLives) return;
     Net_MultiLivesKnockout_GainedLives += 1;
     Net_MultiLivesKnockout_RemainingLives += 1;
+}
+
+Void ForceConsumeLife(CSmScore _Score) {
+        if (_Score == Null) return;
+    declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
+    Net_MultiLivesKnockout_RemainingLives -= 1;
+    declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
+    if (Net_MultiLivesKnockout_GainedLives > 0) {
+        Net_MultiLivesKnockout_GainedLives -= 1;
+    }
+}
+
+Void ForceRestoreLife(CSmScore _Score) {
+    if (_Score == Null) return;
+    if (!ScoreIsAlive(_Score)) return;
+    declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
+    declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
+    Net_MultiLivesKnockout_RemainingLives += 1;
+    if (Net_MultiLivesKnockout_RemainingLives > S_MaximumLives) {
+        Net_MultiLivesKnockout_GainedLives += 1;
+    }
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1291,6 +1329,9 @@ Void LoadManialinks() {
     <label id="label-player-lives" pos="42 -2.5" z-index="2" size="9 5"  halign="right" valign="center" textsize="0.8" textfont="GameFontExtraBold" textcolor="dedede"/>
     <quad id="quad-player-time-background" pos="55 0" size="12 4.8" halign="right" bgcolor="ffffff" opacity="0.2"/>
     <label id="label-player-time" pos="54 -2" z-index="2" size="10 5" halign="right" valign="center" textsize="2" textfont="Nadeo/Trackmania/BebasNeueRegular" textcolor="ffffff"/>
+    <quad id="quad-player-life-background" pos="55 0" size="10 4.8" bgcolor="ffffff" opacity="0.2" visible="0"/>
+    <label id="label-player-life-minus" pos="57.5 -2.4" size="5 4.8" halign="center" valign="center2" text="-" textsize="4.8" textfont="Nadeo/Trackmania/BebasNeueRegular" scriptevents="1" visible="0"/>
+    <label id="label-player-life-plus" pos="62.5 -2.4" size="5 4.8" halign="center" valign="center2" text="+" textsize="4.8" textfont="Nadeo/Trackmania/BebasNeueRegular" scriptevents="1" visible="0"/>
 </framemodel>
 <frame id="frame-global" hidden="1">
     <frame id="frame-matchinfo" pos="-160 80" hidden="1">
@@ -1538,6 +1579,22 @@ Void UpdateRankingPlayer(CMlControl _Control_Player, K_PlayerState _PlayerState)
     declare Text Quad_Login for Quad_Player_Button = "";
     if (_PlayerState.IsNotPlaying) Quad_Login = "";
     else Quad_Login = _PlayerState.Login;
+
+    //Set life control visible
+    declare CMlQuad Quad_PlayerLifeControls_Background = Frame_Player.GetFirstChild("quad-player-life-background") as CMlQuad;
+    declare CMlLabel Label_PlayerLifeMinus = Frame_Player.GetFirstChild("label-player-life-minus") as CMlLabel;
+    declare CMlLabel Label_PlayerLifePlus = Frame_Player.GetFirstChild("label-player-life-plus") as CMlLabel;
+
+    declare netread Text[] Net_AdminAccountIds for Teams[0];
+    if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+        Quad_PlayerLifeControls_Background.Visible = True;
+        Label_PlayerLifeMinus.Visible = True;
+        Label_PlayerLifePlus.Visible = True;
+    } else {
+        Quad_PlayerLifeControls_Background.Visible = False;
+        Label_PlayerLifeMinus.Visible = False;
+        Label_PlayerLifePlus.Visible = False;
+    }
 
     // Set CP Time Background
     declare CMlQuad Quad_Player_Time_Background <=> (Frame_Player.GetFirstChild("quad-player-time-background") as CMlQuad);
@@ -1791,6 +1848,7 @@ main() {
 
     declare CMlTextEdit TextEdit_Player_Search = (Frame_LiveRanking.GetFirstChild("textedit-player-search") as CMlTextEdit);
 
+
     wait (InputPlayer != Null);
 
     Frame_Global.Visible = True;
@@ -1892,6 +1950,20 @@ main() {
                         case "label-next-round-life-gain": {
                             SendCustomEvent("NextRoundLifeGainEvent", []);
                         }
+                        case "label-player-life-minus": {
+                            declare CMlQuad Button <=> (Event.Control.Parent.GetFirstChild("quad-player-button") as CMlQuad);
+                            declare Text Quad_Login for Button = "";
+                            if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+                                SendCustomEvent("PlayerOverrideRemoveLife", [Quad_Login]);
+                            }
+                        }
+                        case "label-player-life-plus": {
+                            declare CMlQuad Button <=> (Event.Control.Parent.GetFirstChild("quad-player-button") as CMlQuad);
+                            declare Text Quad_Login for Button = "";
+                            if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+                                SendCustomEvent("PlayerOverrideAddLife", [Quad_Login]);
+                            }
+                        }
                     }
                 }
                 case CMlScriptEvent::Type::MouseOver: {
@@ -1903,6 +1975,12 @@ main() {
                                 Quad.Opacity = .2;
                             }
                         }
+                        case "label-player-life-minus": {
+                            (Event.Control as CMlLabel).TextColor = CL::HexToRgb("FF0000");
+                        }
+                        case "label-player-life-plus": {
+                            (Event.Control as CMlLabel).TextColor = CL::HexToRgb("00FF00");
+                        }
                     }
                 }
                 case CMlScriptEvent::Type::MouseOut: {
@@ -1912,6 +1990,12 @@ main() {
                             if (Quad.Opacity < .25) {
                                 Quad.Opacity = 0.;
                             }
+                        }
+                        case "label-player-life-minus": {
+                            (Event.Control as CMlLabel).TextColor = CL::HexToRgb("FFFFFF");
+                        }
+                        case "label-player-life-plus": {
+                            (Event.Control as CMlLabel).TextColor = CL::HexToRgb("FFFFFF");
                         }
                     }
                 }
