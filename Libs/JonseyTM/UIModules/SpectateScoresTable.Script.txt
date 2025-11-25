@@ -124,6 +124,7 @@ Void LoadManialinks() {
     Integer Points;
     Integer RoundPoints;
     Boolean Finalist;
+    Boolean Winner;
 }
  
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -229,7 +230,24 @@ Void UpdateRankingPlayer(CMlControl _Control_Player, K_PlayerState _PlayerState)
     //Set Points
     declare CMlLabel Label_Player_Points <=> (Frame_Player.GetFirstChild("label-player-points") as CMlLabel);
 
-    if (!_PlayerState.Finalist) {
+    if (_PlayerState.Finalist) {
+
+        Label_Player_Points.TextColor = <1.0, 0.0, 0.0>;
+
+        Label_Player_Points.TextFont = "GameFontExtraBold";
+
+        Label_Player_Points.Value = "$iF$z";
+
+    } else if (_PlayerState.Winner) {
+
+        Label_Player_Points.TextColor = <0.0, 1.0, 0.0>;
+
+        Label_Player_Points.TextFont = "GameFontExtraBold";
+
+        Label_Player_Points.Value = "$iW$z";
+
+    } else {
+
         Label_Player_Points.TextColor = <1.0, 1.0, 1.0>;
 
         Label_Player_Points.TextFont = "Nadeo/Trackmania/BebasNeueRegular";
@@ -241,12 +259,6 @@ Void UpdateRankingPlayer(CMlControl _Control_Player, K_PlayerState _PlayerState)
         }
 
         Label_Player_Points.Value = PointsValue;
-    } else {
-        Label_Player_Points.TextColor = <1.0, 0.0, 0.0>;
-
-        Label_Player_Points.TextFont = "GameFontExtraBold";
-
-        Label_Player_Points.Value = "$iF$z";
     }
  
     // Set Spectate Button
@@ -305,7 +317,7 @@ Void UpdateRanking() {
     foreach (Score in Scores) {
         if (Score.User == Null) continue;
 
-        if (Score.Points > Net_Spectate_LiveRanking_PointLimit) continue;
+        if (Score.Points > Net_Spectate_LiveRanking_PointLimit && Score.PrevRaceTimes.count != 0) continue;
  
         declare K_PlayerState PlayerState = K_PlayerState {
             Name = Score.User.Name,
@@ -315,7 +327,8 @@ Void UpdateRanking() {
             IsNotPlaying = True,
             Points = Score.Points,
             RoundPoints = Score.RoundPoints,
-            Finalist = Score.Points == Net_Spectate_LiveRanking_PointLimit
+            Finalist = Score.Points == Net_Spectate_LiveRanking_PointLimit,
+            Winner = Score.Points > Net_Spectate_LiveRanking_PointLimit
         };
  
         if (WarmupHelpers::IsWarmupActive(Teams[0])) {
