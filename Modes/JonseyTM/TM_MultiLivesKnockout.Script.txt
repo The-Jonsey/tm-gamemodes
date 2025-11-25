@@ -797,10 +797,11 @@ Void RestoreLife(CSmScore _Score) {
 }
 
 Void ForceConsumeLife(CSmScore _Score) {
-        if (_Score == Null) return;
+    if (_Score == Null) return;
     declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
-    Net_MultiLivesKnockout_RemainingLives -= 1;
     declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
+    if (Net_MultiLivesKnockout_RemainingLives <=0 && Net_MultiLivesKnockout_GainedLives <= 0) return;
+    Net_MultiLivesKnockout_RemainingLives -= 1;
     if (Net_MultiLivesKnockout_GainedLives > 0) {
         Net_MultiLivesKnockout_GainedLives -= 1;
     }
@@ -808,7 +809,6 @@ Void ForceConsumeLife(CSmScore _Score) {
 
 Void ForceRestoreLife(CSmScore _Score) {
     if (_Score == Null) return;
-    if (!ScoreIsAlive(_Score)) return;
     declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
     declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
     Net_MultiLivesKnockout_RemainingLives += 1;
@@ -1408,6 +1408,8 @@ Disabled"/>
     Integer Delta;
     Integer Lives;
     Boolean InDanger;
+    Boolean InOrange;
+    Boolean InYellow;
     Boolean IsNotPlaying;
     Boolean Finished;
     Integer GainedLives;
@@ -1600,6 +1602,8 @@ Void UpdateRankingPlayer(CMlControl _Control_Player, K_PlayerState _PlayerState)
     declare CMlQuad Quad_Player_Time_Background <=> (Frame_Player.GetFirstChild("quad-player-time-background") as CMlQuad);
     if (WarmupHelpers::IsWarmupActive(Teams[0])) Quad_Player_Time_Background.BgColor = <0.96, 0.35, 0.14>;
     else if (_PlayerState.InDanger) Quad_Player_Time_Background.BgColor = <1., 0., 0.>;
+    else if (_PlayerState.InOrange) Quad_Player_Time_Background.BgColor = <1., 0.5, 0.>;
+    else if (_PlayerState.InYellow) Quad_Player_Time_Background.BgColor = <1., 1., 0.>;
     else Quad_Player_Time_Background.BgColor = <1., 1., 1.>;
 
     //Set background opacity (if playing or spectated)
@@ -1652,7 +1656,7 @@ Void UpdateRanking() {
         declare netread Integer Net_MultiLivesKnockout_RemainingLives for Score;
         declare netread Integer Net_MultiLivesKnockout_GainedLives for Score;
         declare Integer Lives = Net_MultiLivesKnockout_RemainingLives;
-        if (Lives <= 0) continue; // Skip KO player
+        if (Lives <= 0 && Score.PrevRaceTimes.count != 0) continue; // Skip KO player
 
         declare K_PlayerState PlayerState = K_PlayerState {
             Name = Score.User.Name,
@@ -1730,6 +1734,8 @@ Void UpdateRanking() {
 
                 PlayerState.Rank = Rank;
                 PlayerState.InDanger = (Rank >= LostOfLifeRank);
+                PlayerState.InOrange = (Rank == LostOfLifeRank - 1) && Rank > 1;
+                PlayerState.InYellow = (Rank == LostOfLifeRank - 2) && Rank > 1;
 
                 if (FirstPlayer == Null) {
                     declare Ident FirstPlayerId = ScoreIdToPlayerId.get(PlayerState.ScoreId, NullId);
