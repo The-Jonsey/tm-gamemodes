@@ -27,7 +27,6 @@
 // MARK: Settings
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 #Setting S_FinishTimeout 5 as _("Finish timeout")
-#Setting S_RoundsPerMap -1 as _("Number of rounds per track") ///< Number of round to play on one map before going to the next one
 #Setting S_WarmUpNb 0 as _("Number of warm up")
 #Setting S_WarmUpDuration 0 as _("Duration of one warm up")
 #Setting S_WarmUpTimeout -1 as _("Warm up timeout")
@@ -85,19 +84,13 @@
 
 #Struct K_MatchInfo {
     Boolean RegistrationClosed;
-    Integer[Text] PlayerRanks; // from 1 to ParticipantsNb, 0 means still alive, -1 means player never played but mode tried to eliminate them
-    Integer KOPlayersNb;
+    Integer[Text][Text] PlayerRanks; // from 1 to ParticipantsNb, 0 means still alive, -1 means player never played but mode tried to eliminate them
+    Integer[Text] KOPlayersNb;
     Integer ParticipantsNb;
 }
 
 #Struct K_Callback_Elimination {
     Text[] accountids;
-}
-
-#Struct K_PlayerMapRecord {
-    CUser Player;
-    Integer TotalTime;
-    Integer LastRoundUpdated;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -258,8 +251,7 @@ if (S_RallyCarEnabled) {
 }
 ModelNames = RandomiseCarList(ModelNames);
 declare Integer CarIndex = 0;
-declare Integer RoundsPerMap = S_RoundsPerMap;
-if (S_RoundsPerMap == -1) RoundsPerMap = ModelNames.count; 
+declare Integer RoundsPerMap = ModelNames.count;
 ***
 
 ***Match_StartMatch***
@@ -274,21 +266,27 @@ OpenNewRegistrations();
 foreach(Player in Players) {
     if (Player != Null) RegisterPlayer(Player);
 }
-// UpdateCustomRanking([]);
+UpdateCustomRanking();
 ***
 
 ***Match_InitMap***
 ***
 declare Boolean Map_DisplayCustom321Go;
 
-UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRoundNb, GetAlivePlayers(), RoundsPerMap));
-// UpdateCustomRanking([]);
+UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRoundNb));
+UpdateCustomRanking();
 UIModules_KnockoutInfo::UpdateLiveRanking();
 UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
 if (S_RandomiseCarOrderPerMap == True) {
     ModelNames = RandomiseCarList(ModelNames);
 }
-declare K_PlayerMapRecord[] MapPlayerTimes = [];
+declare Integer RoundsPerMap = ModelNames.count;
+foreach (Car in ModelNames) {
+    if (GetAlivePlayersForCar(Car) == 1) {
+        RoundsPerMap -= 1;
+    }
+}
+// declare K_PlayerMapRecord[] MapPlayerTimes = [];
 declare CUser[] DNFdPlayers = [];
 declare Text[] Round_EliminatedPlayers = []; // accountids
 declare Integer Round_EliminatedPlayersNb;
@@ -312,11 +310,13 @@ if (!Match_SkipWarmup) { // Warmup only before daily match starts
     MB_WarmUp(S_WarmUpNb, S_WarmUpDuration * 1000, S_WarmUpTimeout * 1000);
 }
 
-UpdateCustomRanking(MapPlayerTimes, DNFdPlayers);
+UpdateCustomRanking();
 ***
 
 ***Match_InitRound***
 ***
+declare Text[] Round_EliminatedPlayers = []; // accountids
+declare Integer Round_EliminatedPlayersNb;
 declare Text StartingCar;
 if (ModelNames.count > 1) {
     StartingCar = ModelNames[CarIndex];
@@ -324,6 +324,19 @@ if (ModelNames.count > 1) {
     StartingCar = ModelNames[0];
 } else {
     StartingCar = MapPlayerModelName;
+}
+while (GetAlivePlayersForCar(StartingCar) == 1) {
+    CarIndex += 1;
+    if (CarIndex >= ModelNames.count) {
+        CarIndex = 0;
+    }
+    if (ModelNames.count > 1) {
+        StartingCar = ModelNames[CarIndex];
+    } else if (ModelNames.count == 1) {
+        StartingCar = ModelNames[0];
+    } else {
+        StartingCar = MapPlayerModelName;
+    }
 }
 foreach (Player in Players) {
     if (StartingCar == MapPlayerModelName) {
@@ -349,7 +362,7 @@ if (RegistrationsAreOpen()) {
         if (!PlayerIsRegistered(Player.User.WebServicesUserId)) RegisterPlayer(Player);
     }
 }
-declare Integer AlivePlayersNb = GetAlivePlayers();
+declare Integer AlivePlayersNb = GetAlivePlayersForCar(StartingCar);
 Round_EliminatedPlayersNb = GetEliminationsNb(AlivePlayersNb, Match_CurrentRoundNb);
 if (Round_EliminatedPlayersNb <= 0) {
     CarRank::ResetRanksColors();
@@ -360,7 +373,7 @@ if (Round_EliminatedPlayersNb <= 0) {
     ]);
 }
 
-UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, Round_EliminatedPlayersNb, GetAlivePlayers(), RoundsPerMap, MapPlayerTimes);
+UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, RoundsPerMap, Round_EliminatedPlayersNb, GetAlivePlayersForCar(StartingCar), StartingCar);
 
 declare ObjectiveMessage = "";
 if (Round_EliminatedPlayersNb > 1) {
@@ -376,17 +389,19 @@ if (Round_EliminatedPlayersNb > 1) {
 UIModules_BigMessage::SetMessage(ObjectiveMessage, 5500);
 UIModules_BigMessage::SetOffset(<0., -40.>);
 
-UIManager.UIAll.BigMessageSound = CUIConfig::EUISound::Default;
-UIManager.UIAll.BigMessageSoundVariant = 0;
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "3");
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "2");
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "1");
-MB_Sleep(1000);
-UIManager.UIAll.BigMessage = "";
-StartTime = Now + Race::C_SpawnDuration;
+if (Map_DisplayCustom321Go) {
+    UIManager.UIAll.BigMessageSound = CUIConfig::EUISound::Default;
+    UIManager.UIAll.BigMessageSoundVariant = 0;
+    MB_Sleep(1000);
+    UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "3");
+    MB_Sleep(1000);
+    UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "2");
+    MB_Sleep(1000);
+    UIManager.UIAll.BigMessage = TL::Compose(C_Text_NextRoundTimer, "$i$t", "1");
+    MB_Sleep(1000);
+    UIManager.UIAll.BigMessage = "";
+    StartTime = Now + Race::C_SpawnDuration;
+}
 
 // Reset spawn permissions for players and spectators according to Rounds rules
 foreach (Score in Scores) {
@@ -410,14 +425,14 @@ foreach (Player in Players) {
         declare Knockout_SpawnPermissionRequested for Player.Score = False;
         if (!Knockout_SpawnPermissionRequested) {
             Knockout_SpawnPermissionRequested = True;
-            RequestSpawnPermission(Player, DNFdPlayers);
+            RequestSpawnPermission(Player, StartingCar);
             NeedInfoDisplayUpdate = True;
         }
     }
 }
 
 if (NeedInfoDisplayUpdate) {
-    UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, Round_EliminatedPlayersNb, GetAlivePlayers(), RoundsPerMap, MapPlayerTimes);
+    UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, RoundsPerMap, Round_EliminatedPlayersNb, GetAlivePlayersForCar(StartingCar), StartingCar);
     NeedInfoDisplayUpdate = False;
 }
 ***
@@ -430,9 +445,9 @@ UIModules_BestRaceViewer::SetPrevDisplay(False);
 foreach (Score in Scores) {
     SetFinishedRace(Score, False);
     TagDNF(Score, False);
-    TagAlive(Score, PlayerIsAlive(Score.User.WebServicesUserId, DNFdPlayers));
+    TagAlive(Score, PlayerIsAliveForCar(Score.User.WebServicesUserId, StartingCar));
 }
-UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, Round_EliminatedPlayersNb, GetAlivePlayers(), RoundsPerMap, MapPlayerTimes);
+UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, RoundsPerMap, Round_EliminatedPlayersNb, GetAlivePlayersForCar(StartingCar), StartingCar);
 NeedInfoDisplayUpdate = False;
 
 StateMgr::ForcePlayersStates([StateMgr::C_State_Playing]);
@@ -454,7 +469,7 @@ foreach (Player in Players) {
         declare Knockout_SpawnPermissionRequested for Player.Score = False;
         if (!Knockout_SpawnPermissionRequested) {
             Knockout_SpawnPermissionRequested = True;
-            RequestSpawnPermission(Player, DNFdPlayers);
+            RequestSpawnPermission(Player, StartingCar);
             NeedInfoDisplayUpdate = True;
         }
         declare ModeRounds_CanSpawn for Player.Score = True;
@@ -472,7 +487,7 @@ foreach (Player in Players) {
     }
 }
 if (NeedInfoDisplayUpdate) {
-    UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, Round_EliminatedPlayersNb, GetAlivePlayers(), RoundsPerMap, MapPlayerTimes);
+    UpdateKnockoutInfoDisplay(Match_CurrentRoundNb, RoundsPerMap, Round_EliminatedPlayersNb, GetAlivePlayersForCar(StartingCar), StartingCar);
     NeedInfoDisplayUpdate = False;
 }
 
@@ -515,17 +530,7 @@ foreach (Event in RacePendingEvents) {
 
                 SetFinishedRace(Event.Player.Score, True);
                 UIModules_BestRaceViewer::SetPrevDisplay(Event.Player, True);
-                declare CSmScore Score <=> Event.Player.Score;
-                declare Integer PlayerScoreIndex = FindPlayerIndex(MapPlayerTimes, Score);
-                if (PlayerScoreIndex == -1) {
-                    declare K_PlayerMapRecord PlayerScore;
-                    PlayerScore.Player = Score.User;
-                    MapPlayerTimes.add(PlayerScore);
-                    PlayerScoreIndex = MapPlayerTimes.count - 1;
-                }
-                MapPlayerTimes[PlayerScoreIndex].LastRoundUpdated = Match_CurrentRoundNb;
-                if (Score.PrevRaceTimes.count > 0) MapPlayerTimes[PlayerScoreIndex].TotalTime += Score.PrevRaceTimes[0];
-                UpdateCustomRanking(MapPlayerTimes, DNFdPlayers);
+                UpdateCustomRanking(StartingCar);
             }
             if (Event.IsEndLap) {
                 declare Better = Scores::UpdatePlayerBestLapIfBetter(Event.Player);
@@ -574,108 +579,62 @@ if (Round_ForceEndRound || Round_SkipPauseRound) {
         ForcedEndRoundSequence();
     }
     MB_SetValidRound(False);
-    Match_CurrentRoundNb -= 1;
 } else {
     CarIndex += 1;
     if (CarIndex >= ModelIds.count - 1) {
         CarIndex = 0;
     }
     // Eliminate players that did not finish in time
-    declare Ident[] EliminatedPlayersScoresIds = []; // Score.I
-    //     // Close registrations. Players can join the game any time during no elimination rounds
+    declare Ident[] EliminatedPlayersScoresIds = []; // Score.Id
+    // Close registrations. Players can join the game any time during no elimination rounds
     if (RegistrationsAreOpen()) CloseRegistrations();
 
-//     // Eliminate last players
+    // Eliminate last players
     Race::SortScores(Race::C_Sort_PrevRaceTime);
     declare CSmScore[] PrevRaceRanking = Race::GetPrevRaceRanking();
-//     declare EliminationsNb = GetEliminationsNb(GetAlivePlayers(), Match_CurrentRoundNb);
-//     declare Ident[] ReversedEliminatedPlayersScoresIds;
+    declare EliminationsNb = GetEliminationsNb(GetAlivePlayersForCar(StartingCar), Match_CurrentRoundNb);
+    declare Ident[] ReversedEliminatedPlayersScoresIds;
     if (PrevRaceRanking.count > 0) {
         for (I, 0, PrevRaceRanking.count-1) {
-            declare CSmScore Score <=> PrevRaceRanking[PrevRaceRanking.count-1 - I];
-            if (DNFdPlayers.exists(Score.User)) {
-                continue;
+            declare Score <=> PrevRaceRanking[PrevRaceRanking.count-1 - I];
+            if (Score != Null) {
+                if (PlayerIsAliveForCar(Score.User.WebServicesUserId, StartingCar)) {
+                    if (!GetFinishedRace(Score)) {
+                        ReversedEliminatedPlayersScoresIds.add(Score.Id);
+                        EliminationsNb -= 1;
+                        TagDNF(Score, True);
+                    } else if (EliminationsNb > 0) {
+                        ReversedEliminatedPlayersScoresIds.add(Score.Id);
+                        EliminationsNb -= 1;
+                    }
+                }
             }
-            if (!GetFinishedRace(Score)) {
-                if (!DNFdPlayers.exists(Score.User)) DNFdPlayers.add(Score.User);
-                TagDNF(Score, True);
-                continue;
+        }
+        foreach (ScoreId in ReversedEliminatedPlayersScoresIds) {
+            EliminatedPlayersScoresIds.add(ScoreId);
+            if (
+                Scores.existskey(ScoreId) &&
+                Scores[ScoreId] != Null
+            ) {
+                Round_EliminatedPlayers.add(Scores[ScoreId].User.WebServicesUserId);
             }
-            declare Integer PlayerScoreIndex = FindPlayerIndex(MapPlayerTimes, Score);
-            if (PlayerScoreIndex == -1) {
-                declare K_PlayerMapRecord PlayerScore;
-                PlayerScore.Player = Score.User;
-                MapPlayerTimes.add(PlayerScore);
-                PlayerScoreIndex = MapPlayerTimes.count - 1;
-            }
-            if (MapPlayerTimes[PlayerScoreIndex].LastRoundUpdated == Match_CurrentRoundNb) continue;
-            MapPlayerTimes[PlayerScoreIndex].LastRoundUpdated = Match_CurrentRoundNb;
-            if (Score.PrevRaceTimes.count > 0) MapPlayerTimes[PlayerScoreIndex].TotalTime += Score.PrevRaceTimes[0];
-            log(MapPlayerTimes[PlayerScoreIndex]);
         }
     }
-
-    if (MapIsOver(RoundsPerMap)) MB_StopMap();
-}
-***
-
-***Match_EndMap***
-***
-    log(MapPlayerTimes);
-
-    declare EliminationsNb = GetEliminationsNb(GetAlivePlayers(), Match_CurrentRoundNb);
-
-    declare CUser[] EliminatedUsers = [];
-
-    for (I, 0, EliminationsNb - 1) {
-        declare Integer WorstTime = 0;
-        declare CUser WorstPlayer;
-        foreach (PlayerScore in MapPlayerTimes) {
-            if (EliminatedUsers.exists(PlayerScore.Player)) {
-                continue;
-            }
-            if (PlayerScore.TotalTime > WorstTime) {
-                WorstTime = PlayerScore.TotalTime;
-                WorstPlayer = PlayerScore.Player;
-            }
-        }
-        EliminatedUsers.add(WorstPlayer);
-    }
-    log(EliminationsNb);
-    log(EliminatedUsers);
-
-    EliminationsNb = GetEliminationsNb(GetAlivePlayers(), Match_CurrentRoundNb);
-
-    declare Ident[] ScoresForElimination = [];
-    foreach (player in Players) {
-        if (DNFdPlayers.exists(player.Score.User)) {
-            ScoresForElimination.add(player.Score.Id);
-            TagDNF(player.Score, True);
-            EliminationsNb -= 1;
-            Round_EliminatedPlayers.add(player.Score.User.WebServicesUserId);
-        }
-    }
-
-    foreach (player in Players) {
-        if (EliminationsNb <= 0) {
-            break;
-        }
-        if (EliminatedUsers.exists(player.Score.User)) {
-            ScoresForElimination.add(player.Score.Id);
-            Round_EliminatedPlayers.add(player.Score.User.WebServicesUserId);
-        }
-    }
-
-    EliminatePlayers(ScoresForElimination, DNFdPlayers);
+    EliminatePlayers(EliminatedPlayersScoresIds, StartingCar);
 
     // Check if match is over
-    if (MatchIsOver()) {
+    if (MatchIsOver(Match_CurrentRoundNb)) {
         Match_MatchIsOver = True;
-        declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
+        declare Real Match_WinningAggregatedRank = 9999.0;
         Match_WinnersAccountIds = [];
         Match_WinnersLogins = [];
-        foreach (AccountId => Status in Server_MatchInfo.PlayerRanks) {
-            if (Status == 0) Match_WinnersAccountIds.add(AccountId);
+        foreach (AccountId => Status in GetAggregatedPlayerRanks()) {
+            if (Status < Match_WinningAggregatedRank) {
+                Match_WinningAggregatedRank = Status;
+                Match_WinnersAccountIds = [AccountId];
+            } else if (Status == Match_WinningAggregatedRank) {
+                Match_WinnersAccountIds.add(AccountId);
+            }
         }
         if (Match_WinnersAccountIds.count > 0) {
             declare Ident[] LeaderScoresIds;
@@ -688,19 +647,21 @@ if (Round_ForceEndRound || Round_SkipPauseRound) {
                     Match_WinnersLogins.add(Score.User.Login);
                 }
             }
-            EliminatePlayers(LeaderScoresIds, DNFdPlayers); // Only one player will be considered as winner
         }
+        MB_StopMatch();
     }
 
     // Send Trophies, uses Round_EliminatedPlayers array
     +++Match_EndRound_AfterComputeScores+++
 
     UIModules_KnockoutInfo::UpdateLiveRanking();
-    UpdateCustomRanking(MapPlayerTimes, DNFdPlayers);
-    UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRoundNb, GetAlivePlayers(), RoundsPerMap));
+    UpdateCustomRanking(StartingCar);
+    MB_Sleep(2500);
+    UpdateCustomRanking();
+    UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRoundNb));
 
     UIModules_KnockedOutPlayers::DisplayContent(True);
-    UIModules_KnockedOutPlayers::DisplayEliminatedPlayer(Round_EliminatedPlayers, GetPlayerRanks(Round_EliminatedPlayers));
+    UIModules_KnockedOutPlayers::DisplayEliminatedPlayer(Round_EliminatedPlayers, GetPlayerRanks(Round_EliminatedPlayers, StartingCar));
     declare PagesToShow = Round_EliminatedPlayers.count/4;
     if (Round_EliminatedPlayers.count%4 != 0) PagesToShow += 1;
     MB_Sleep(ML::Max(1100 + 350*Round_EliminatedPlayers.count + 1600*PagesToShow + 250, 6000 + 250));
@@ -711,27 +672,21 @@ if (Round_ForceEndRound || Round_SkipPauseRound) {
         Callback_Elimination.accountids.add(AccountId);
     }
     XmlRpc::SendCallback(C_Callback_Elimination, [Callback_Elimination.tojson()]);
-    foreach (ScoreId in ScoresForElimination) {
-        if (
-            Scores.existskey(ScoreId) &&
-            Scores[ScoreId] != Null
-        ) {
-            declare Player = GetPlayer(Scores[ScoreId].User.Login);
-            if (Player != Null) {
-                UIModules_KnockoutReward::SetPlayerEliminated(Player, True);
-                UIModules_KnockoutReward::SendResult(Player);
-            }
-        }
-    }
-    foreach (Login in Match_WinnersLogins) {
-        declare Player = GetPlayer(Login);
-        if (Player != Null) {
-            UIModules_KnockoutReward::SetPlayerEliminated(Player, True); // Winner
-            UIModules_KnockoutReward::SendResult(Player);
-        }
+
+    if (GetAlivePlayersForCar(StartingCar) == 1) {
+        declare Text CarWinningAccountId = GetWinnerForCar(StartingCar);
+        declare Text Template = "$<%1$> wins the " ^ StartingCar ^ "!";
+        UIModules_BigMessage::SetMessage(Template, CarWinningAccountId);
+        MB_Sleep(2500);
     }
 
-if (MatchIsOver()) {
+    if (MapIsOver(Match_CurrentRoundNb, RoundsPerMap)) MB_StopMap();
+}
+***
+
+***Match_EndMap***
+***
+if (MatchIsOver(Match_CurrentRoundNb)) {
     MB_StopMatch();
 } else {
     MB_Sleep(2500);
@@ -748,9 +703,19 @@ Scores::SetPlayerWinner(Scores::GetBestPlayer(Scores::C_Sort_MatchPoints));
 if (!MB_Private_SkipPodiumSequence) {
     ModeUtils::PlaySound(CUIConfig::EUISound::EndRound, 0);
 
-    declare WinnerScore <=> Scores::GetPlayerWinner();
-    if (WinnerScore != Null) {
-        UIModules_BigMessage::SetMessage(_("$<%1$> wins the match!"), WinnerScore.User.WebServicesUserId);
+    declare Real Match_WinningAggregatedRank = 9999.0;
+    Match_WinnersAccountIds = [];
+    Match_WinnersLogins = [];
+    foreach (AccountId => Status in GetAggregatedPlayerRanks()) {
+        if (Status < Match_WinningAggregatedRank) {
+            Match_WinningAggregatedRank = Status;
+            Match_WinnersAccountIds = [AccountId];
+        } else if (Status == Match_WinningAggregatedRank) {
+            Match_WinnersAccountIds.add(AccountId);
+        }
+    }
+    if (Match_WinnersAccountIds.count == 1) {
+        UIModules_BigMessage::SetMessage(_("$<%1$> wins the match!"), Match_WinnersAccountIds[0]);
     } else {
         UIModules_BigMessage::SetMessage(_("|Match|Draw"));
     }
@@ -786,8 +751,8 @@ if (!MB_Private_SkipPodiumSequence) {
         UIModules_KnockoutReward::ResetResult(Score);
     }
     Scores::Clear();
-    UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRoundNb, GetAlivePlayers(), RoundsPerMap));
-    // UpdateCustomRanking([]);
+    UpdateScoresTableFooter(Match_CurrentRoundNb, GetTotalRoundNb(Match_CurrentRoundNb));
+    UpdateCustomRanking();
     UIModules_KnockoutInfo::UpdateLiveRanking();
     foreach (Player in AllPlayers) {
         if (Player != Null) {
@@ -802,8 +767,8 @@ if (!MB_Private_SkipPodiumSequence) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player is registered or not
  *
- *@return                                        True if the player is registered
- *                                                    False Otherwise
+ *@return										True if the player is registered
+ *													False Otherwise
  */
 Boolean PlayerIsRegistered(Text _AccountId) {
     if (_AccountId == "") return False;
@@ -811,35 +776,41 @@ Boolean PlayerIsRegistered(Text _AccountId) {
     return Server_MatchInfo.PlayerRanks.existskey(_AccountId);
 }
 
-
-Boolean PlayerIsDNF(Text _AccountId, CUser[] _DNFdPlayers) {
-    foreach(User in _DNFdPlayers) {
-        if (User.WebServicesUserId == _AccountId) return True;
-    }
-    return False;
-}
-
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player has been eliminated or not
  *
- *@return                                        True if the player has been eliminated
- *                                                    False Otherwise
+ *@return										True if the player has been eliminated
+ *													False Otherwise
  */
-Boolean PlayerIsAlive(Text _AccountId, CUser[] _DNFdPlayers) {
+Boolean PlayerIsAliveForCar(Text _AccountId, Text _Car) {
     if (_AccountId == "") return False;
     declare K_MatchInfo Server_MatchInfo for This;
     return (
         PlayerIsRegistered(_AccountId) &&
-        Server_MatchInfo.PlayerRanks[_AccountId] == 0 &&
-        !PlayerIsDNF(_AccountId, _DNFdPlayers)
+        Server_MatchInfo.PlayerRanks[_AccountId][_Car] == 0
+    );
+}
+
+Boolean PlayerIsAlive(Text _AccountId) {
+    if (_AccountId == "") return False;
+    declare K_MatchInfo Server_MatchInfo for This;
+    declare Boolean IsAlive = False;
+    foreach (Car => Stat in Server_MatchInfo.PlayerRanks[_AccountId]) {
+        if (Stat == 0) {
+            IsAlive = True;
+        }
+    }
+    return (
+        PlayerIsRegistered(_AccountId) &&
+        IsAlive
     );
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Tag a score as finished curr race or not
  *
- *    @param                                                        _Score
- *    @param                                                        _IsAlive
+ *	@param														_Score
+ *	@param														_IsAlive
  */
 Void TagAlive(CSmScore _Score, Boolean _IsAlive) {
     if (_Score == Null) return;
@@ -850,8 +821,8 @@ Void TagAlive(CSmScore _Score, Boolean _IsAlive) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Tag a score as DNF
  *
- *    @param                                                        _Score
- *    @param                                                        _DNF
+ *	@param														_Score
+ *	@param														_DNF
  */
 Void TagDNF(CSmScore _Score, Boolean _DNF) {
     if (_Score == Null) return;
@@ -862,17 +833,41 @@ Void TagDNF(CSmScore _Score, Boolean _DNF) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Number of players still playing
  *
- *    @return                                                        Number of players still playing
+ *	@return														Number of players still playing
  */
 Integer GetAlivePlayers() {
+    declare Integer Total = 0;
     declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
-    return (Server_MatchInfo.ParticipantsNb - Server_MatchInfo.KOPlayersNb);
+    foreach (AccountId => Status in Server_MatchInfo.PlayerRanks) {
+        foreach (Car => Stat in Status) {
+            if (Stat == 0) {
+                Total += 1;
+                break;
+            }
+        }
+    }
+    return Total;
+}
+
+Integer GetAlivePlayersForCar(Text _Car) {
+    declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
+    return Server_MatchInfo.ParticipantsNb - Server_MatchInfo.KOPlayersNb[_Car];
+}
+
+Text GetWinnerForCar(Text _Car) {
+    declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
+    foreach (AccountId => Status in Server_MatchInfo.PlayerRanks) {
+        if (Status[_Car] == 0) {
+            return AccountId;
+        }
+    }
+    return "";
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Init player at the begining of the match
  *
- *    @param    _Player                            Player to init
+ *	@param	_Player							Player to init
  */
 Void RegisterPlayer(CSmPlayer _Player) {
     if (_Player == Null) return;
@@ -882,9 +877,14 @@ Void RegisterPlayer(CSmPlayer _Player) {
         !Server_MatchInfo.PlayerRanks.existskey(_Player.User.WebServicesUserId) &&
         !Server_MatchInfo.RegistrationClosed
     ) {
-        Server_MatchInfo.PlayerRanks[_Player.User.WebServicesUserId] = 0;
+        Server_MatchInfo.PlayerRanks[_Player.User.WebServicesUserId] = [
+            "CarSport" => 0,
+            "CarDesert" => 0,
+            "CarRally" => 0,
+            "CarSnow" => 0
+        ];
         Server_MatchInfo.ParticipantsNb += 1;
-        UIModules_KnockoutInfo::SetAlivePlayersNb(GetAlivePlayers());
+        UIModules_KnockoutInfo::SetAlivePlayersNb(Server_MatchInfo.ParticipantsNb);
         TagAlive(_Player.Score, True);
     }
 }
@@ -898,7 +898,12 @@ Void OpenNewRegistrations() {
     Server_MatchInfo = K_MatchInfo {
         RegistrationClosed = False,
         PlayerRanks = [],
-        KOPlayersNb = 0,
+        KOPlayersNb = [
+            "CarSport" => 0,
+            "CarDesert" => 0,
+            "CarRally" => 0,
+            "CarSnow" => 0
+        ],
         ParticipantsNb = 0
     };
     foreach (Score in Scores) {
@@ -914,8 +919,8 @@ Void OpenNewRegistrations() {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player can join match or not
  *
- *@return                                        True if the player can join
- *                                                    False Otherwise
+ *@return										True if the player can join
+ *													False Otherwise
  */
 Boolean RegistrationsAreOpen() {
     declare K_MatchInfo Server_MatchInfo for This;
@@ -935,9 +940,9 @@ Void CloseRegistrations() {
 /** Eliminate players and assign them their final ranks
  * according to the _ScoreIds list order. 1st player is the best ranked
  *
- *    @param    _ScoreIds                            Score Ids of Players to Eliminate
+ *	@param	_ScoreIds							Score Ids of Players to Eliminate
  */
-Void EliminatePlayers(Ident[] _ScoreIds, CUser[] _DNFdPlayers) {
+Void EliminatePlayers(Ident[] _ScoreIds, Text _Car) {
     if (_ScoreIds.count == 0) return;
     declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
     if (!Server_MatchInfo.RegistrationClosed) return; // Cannot eliminate players if registrations are still open
@@ -946,16 +951,16 @@ Void EliminatePlayers(Ident[] _ScoreIds, CUser[] _DNFdPlayers) {
             declare CSmScore Score <=> Scores[ScoreId];
             declare Text AccountId = Score.User.WebServicesUserId;
             if (!PlayerIsRegistered(AccountId)) {
-                Server_MatchInfo.PlayerRanks[AccountId] = -1;
+                Server_MatchInfo.PlayerRanks[AccountId][_Car] = -1;
                 UIModules_KnockoutReward::SaveRank(Score, -1);
                 UIModules_KnockoutReward::SaveCupRank(Score, -1, -1);
-            } else if (PlayerIsAlive(AccountId, _DNFdPlayers)) {
-                Server_MatchInfo.KOPlayersNb += 1;
-                declare Integer Rank = Server_MatchInfo.ParticipantsNb - Server_MatchInfo.KOPlayersNb + 1;
-                Server_MatchInfo.PlayerRanks[AccountId] = Rank;
-                UIModules_KnockoutReward::SaveRank(Score, Rank);
-                UIModules_KnockoutReward::SaveCupRank(Score, S_MatchPosition, Rank);
-                Tracking::SendPlayerMatchResult(UIManager, Score.User, Rank, Rank == 1);
+            } else if (PlayerIsAlive(AccountId)) {
+                Server_MatchInfo.KOPlayersNb[_Car] += 1;
+                declare Integer Rank = Server_MatchInfo.ParticipantsNb - Server_MatchInfo.KOPlayersNb[_Car] + 1;
+                Server_MatchInfo.PlayerRanks[AccountId][_Car] = Rank;
+                // UIModules_KnockoutReward::SaveRank(Score, Rank);
+                // UIModules_KnockoutReward::SaveCupRank(Score, S_MatchPosition, Rank);
+                // Tracking::SendPlayerMatchResult(UIManager, Score.User, Rank, Rank == 1);
             }
             TagAlive(Score, False);
         }
@@ -976,8 +981,8 @@ Integer[] GetEliminationsMilestones() {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Players Nb at which Emilinations Nb per round decreases
  *
- *    @param    _AlivePlayers                            Number of players still playing
- *    @return                                                        Players Nb of the milestone
+ *	@param	_AlivePlayers							Number of players still playing
+ *	@return														Players Nb of the milestone
  */
 Integer GetNextMilestone(Integer _AlivePlayers) {
     if (_AlivePlayers <= 0) return 0;
@@ -995,8 +1000,8 @@ Integer GetNextMilestone(Integer _AlivePlayers) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Number of players to eliminate this round
  *
- *    @param    _AlivePlayers                            Number of players still playing
- *    @return                                                        Number of eliminations this round
+ *	@param	_AlivePlayers							Number of players still playing
+ *	@return														Number of eliminations this round
  */
 Integer GetEliminationsNb(Integer _AlivePlayers, Integer _RoundNb) {
     if (_AlivePlayers <= 1) return 0;
@@ -1013,48 +1018,42 @@ Integer GetEliminationsNb(Integer _AlivePlayers, Integer _RoundNb) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Estimated number of rounds
  *
- *    @return                                                Estimated number of rounds
+ *	@return												Estimated number of rounds
  */
-
-Integer GetEliminationsForMilestone(Integer _Milestone, Integer[] _Milestones) {
-    declare Integer Eliminations = 0;
-    foreach (Milestone in _Milestones) {
-        if (Milestone <= _Milestone) {
-            Eliminations += 1;
+Integer GetTotalRoundNbForCar(Text _Car) {
+    declare RoundsWithEliminationsLeft = 0;
+    declare AlivePlayers = GetAlivePlayersForCar(_Car);
+    declare Milestones = GetEliminationsMilestones();
+    for (Index, 0, Milestones.count-1) {
+        declare ReverseIndex = Milestones.count-1 - Index;
+        declare Milestone = Milestones[ReverseIndex];
+        if (AlivePlayers > Milestone && AlivePlayers > 1) {
+            declare ElimNbPerRound = ReverseIndex + 1;
+            declare TotalElimNb = AlivePlayers - Milestone;
+            if (TotalElimNb % ElimNbPerRound > 0) TotalElimNb += ElimNbPerRound - TotalElimNb % ElimNbPerRound;
+            RoundsWithEliminationsLeft += TotalElimNb / ElimNbPerRound;
+            AlivePlayers -= TotalElimNb;
         }
     }
-    return Eliminations;
+
+    return ML::Max(0, RoundsWithEliminationsLeft -1);
 }
 
-Integer GetTotalRoundNb(Integer _CurrentRoundNb, Integer _AlivePlayers, Integer _RoundsPerMap) {
-    declare Integer[] Milestones = GetEliminationsMilestones();
-    Milestones = Milestones.sortreverse();
-    declare Integer AlivePlayers = _AlivePlayers;
-    declare Integer Rounds = 0;
-    while (AlivePlayers > 1) {
-        declare Integer PlayersEliminated = 1;
-        foreach (Threshold in Milestones) {
-            if (AlivePlayers > Threshold) {
-                PlayersEliminated = GetEliminationsForMilestone(Threshold, Milestones);
-                break;
-            }
-        }
-        AlivePlayers -= PlayersEliminated;
-        Rounds += 1;
+Integer GetTotalRoundNb(Integer _CurrentRoundNb) {
+    declare Integer Total = 0;
+    declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
+    foreach (Car => Nb in Server_MatchInfo.KOPlayersNb) {
+        Total += GetTotalRoundNbForCar(Car);
     }
-    declare Integer MapRound = MB_GetRoundCount();
-    declare Integer MapRoundsRemaining = 0;
-    if (MapRound != _RoundsPerMap) {
-        MapRoundsRemaining = _RoundsPerMap - (MapRound);
-    }
-    return _CurrentRoundNb + (Rounds * _RoundsPerMap) + MapRoundsRemaining;
+
+    return _CurrentRoundNb + Total;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player finished the race or not
  *
- *    @param    _Score                                Player's score
- *    @param    _HasFinished                    True if player finished race
+ *	@param	_Score								Player's score
+ *	@param	_HasFinished					True if player finished race
  */
 Void SetFinishedRace(CSmScore _Score, Boolean _HasFinished) {
     declare Knockout_FinishedRace for _Score = False;
@@ -1064,8 +1063,8 @@ Void SetFinishedRace(CSmScore _Score, Boolean _HasFinished) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player finished the race or not
  *
- *    @param    _Score                                Player's score
- *    @return                                                True if player finished race
+ *	@param	_Score								Player's score
+ *	@return												True if player finished race
  */
 Boolean GetFinishedRace(CSmScore _Score) {
     declare Knockout_FinishedRace for _Score = False;
@@ -1075,15 +1074,15 @@ Boolean GetFinishedRace(CSmScore _Score) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Player rank in match
  *
- *    @param    _AccountIds                                Account Ids
- *    @return                                                Ranks in same order
+ *	@param	_AccountIds								Account Ids
+ *	@return												Ranks in same order
  */
-Integer[] GetPlayerRanks(Text[] _AccountIds) {
+Integer[] GetPlayerRanks(Text[] _AccountIds, Text _Car) {
     declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
     declare Integer[] Result = [];
     foreach (AccountId in _AccountIds) {
         if (Server_MatchInfo.PlayerRanks.existskey(AccountId)) {
-            Result.add(Server_MatchInfo.PlayerRanks[AccountId]);
+            Result.add(Server_MatchInfo.PlayerRanks[AccountId][_Car]);
         } else {
             Result.add(-2);
         }
@@ -1091,14 +1090,27 @@ Integer[] GetPlayerRanks(Text[] _AccountIds) {
     return Result;
 }
 
+Real[Text] GetAggregatedPlayerRanks() {
+    declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
+    declare Real[Text] AggregatedPlayerRanks = [];
+    foreach(AccountId => CarRanks in Server_MatchInfo.PlayerRanks) {
+        declare Integer TotalRank = 0;
+        foreach(Car => Rank in CarRanks) {
+            TotalRank += Rank;
+        }
+        AggregatedPlayerRanks[AccountId] = ((TotalRank + 0.0) / (CarRanks.count + 0.0));
+    }
+    return AggregatedPlayerRanks;
+}
+
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Whether the player can be spwaned or not, according to KO rules only
  *
- *@param _Player                        The Player
- *@return                                        True if the player can be spwaned
- *                                                    False Otherwise
+ *@param _Player						The Player
+ *@return										True if the player can be spwaned
+ *													False Otherwise
  */
-Boolean RequestSpawnPermission(CSmPlayer _Player, CUser[] _DNFdPlayers) {
+Boolean RequestSpawnPermission(CSmPlayer _Player, Text _Car) {
     if (_Player == Null || _Player.Score == Null) return False;
     declare ModeRounds_CanSpawn for _Player.Score = True;
     if (
@@ -1109,7 +1121,7 @@ Boolean RequestSpawnPermission(CSmPlayer _Player, CUser[] _DNFdPlayers) {
     }
     ModeRounds_CanSpawn = (
         ModeRounds_CanSpawn &&
-        PlayerIsAlive(_Player.User.WebServicesUserId, _DNFdPlayers)
+        PlayerIsAliveForCar(_Player.User.WebServicesUserId, _Car)
     );
     return ModeRounds_CanSpawn;
 }
@@ -1118,7 +1130,7 @@ Boolean RequestSpawnPermission(CSmPlayer _Player, CUser[] _DNFdPlayers) {
 /** Update the Scores Table with hidden custom points
  *
  */
-Void UpdateCustomRanking(K_PlayerMapRecord[] _MapPlayerTimes, CUser[] _DNFdPlayers) {
+Void UpdateCustomRanking(Text _Car) {
     declare Text[] AccountIdsToDisplay = [];
     declare Text[Text] CustomRanks = [];
     declare Text[][Text] CustomPoints = [];
@@ -1126,36 +1138,22 @@ Void UpdateCustomRanking(K_PlayerMapRecord[] _MapPlayerTimes, CUser[] _DNFdPlaye
     declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
     Race::SortScores(Race::C_Sort_PrevRaceTime);
     declare CSmScore[] PrevRaceRanking = Race::GetPrevRaceRanking();
-    declare Integer[] MapPlayerRankings = [];
-    foreach (MapPlayerTime in _MapPlayerTimes) {
-        MapPlayerRankings.add(MapPlayerTime.TotalTime);
-    }
-    MapPlayerRankings = MapPlayerRankings.sort();
-    declare AlivePlayers = GetAlivePlayers();
+    declare AlivePlayers = GetAlivePlayersForCar(_Car);
     foreach (Index => Score in PrevRaceRanking) {
         if (Score == Null) continue;
         if (PlayerIsRegistered(Score.User.WebServicesUserId)) {
             AccountIdsToDisplay.add(Score.User.WebServicesUserId);
-            if (PlayerIsAlive(Score.User.WebServicesUserId, _DNFdPlayers)) {
+
+            if (PlayerIsAliveForCar(Score.User.WebServicesUserId, _Car)) {
+                Scores::SetPlayerMatchPoints(Score, PrevRaceRanking.count + Server_MatchInfo.ParticipantsNb - Index);
                 CustomRanks[Score.User.WebServicesUserId] = "-";
-                if (_DNFdPlayers.exists(Score.User)) {
-                    CustomTimes[Score.User.WebServicesUserId] = 0;
-                    CustomPoints[Score.User.WebServicesUserId] = [_("|Status|DNF"), "f00"];
-                } else {
-                    foreach (PlayerTime in _MapPlayerTimes) {
-                        if (PlayerTime.Player == Score.User) {
-                            Scores::SetPlayerMatchPoints(Score, PrevRaceRanking.count + Server_MatchInfo.ParticipantsNb - MapPlayerRankings.keyof(PlayerTime.TotalTime));
-                            CustomTimes[Score.User.WebServicesUserId] = PlayerTime.TotalTime;
-                        }
-                    }
+                if (!GetFinishedRace(Score)) {
+                    CustomTimes[Score.User.WebServicesUserId] = 0; //@ prev race is updated automatically at the moment (22/10/20) so we need to use this
                 }
-                // if (!GetFinishedRace(Score)) {
-                //     CustomTimes[Score.User.WebServicesUserId] = 0; //@ prev race is updated automatically at the moment (22/10/20) so we need to use this
-                // }
             } else {
                 declare FinalRank = -1;
                 if (Server_MatchInfo.PlayerRanks.existskey(Score.User.WebServicesUserId)) {
-                    FinalRank = Server_MatchInfo.PlayerRanks[Score.User.WebServicesUserId];
+                    FinalRank = Server_MatchInfo.PlayerRanks[Score.User.WebServicesUserId][_Car];
                     Scores::SetPlayerMatchPoints(Score, Server_MatchInfo.ParticipantsNb - FinalRank);
                     CustomRanks[Score.User.WebServicesUserId] = ""^FinalRank;
                 } else {
@@ -1178,10 +1176,36 @@ Void UpdateCustomRanking(K_PlayerMapRecord[] _MapPlayerTimes, CUser[] _DNFdPlaye
     UIModules_ScoresTable::SetCustomTimes(CustomTimes);
 }
 
+Void UpdateCustomRanking() {
+    declare Text[] AccountIdsToDisplay = [];
+    declare Text[Text] CustomRanks = [];
+    declare Text[][Text] CustomPoints = [];
+    // declare Integer[Text] CustomTimes = [];
+    declare K_MatchInfo Server_MatchInfo for This = K_MatchInfo {};
+    Race::SortScores(Race::C_Sort_PrevRaceTime);
+    declare CSmScore[] PrevRaceRanking = Race::GetPrevRaceRanking();
+    declare Real[Text] AggregatedPlayerRanks = GetAggregatedPlayerRanks();
+    AggregatedPlayerRanks.sort();
+    foreach (Index => Score in PrevRaceRanking) {
+        if (Score == Null) continue;
+        if (PlayerIsRegistered(Score.User.WebServicesUserId)) {
+            AccountIdsToDisplay.add(Score.User.WebServicesUserId);
+            Scores::SetPlayerMatchPoints(Score, Server_MatchInfo.ParticipantsNb - ML::NearestInteger(AggregatedPlayerRanks[Score.User.WebServicesUserId]));
+            CustomPoints[Score.User.WebServicesUserId] = [TL::ToText(Server_MatchInfo.ParticipantsNb - ML::NearestInteger(AggregatedPlayerRanks[Score.User.WebServicesUserId]))];
+            CustomRanks[Score.User.WebServicesUserId] = TL::ToText(ML::NearestInteger(AggregatedPlayerRanks[Score.User.WebServicesUserId]) + 1);
+        }
+    }
+    Race::SortScores(Race::C_Sort_TotalPoints);
+    UIModules_ScoresTable::SetCustomRanks(CustomRanks);
+    UIModules_ScoresTable::DisplayOnly(AccountIdsToDisplay); // Display only registered players
+    UIModules_ScoresTable::SetCustomPoints(CustomPoints);
+    // UIModules_ScoresTable::SetCustomTimes(CustomTimes);
+}
+
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Get the time left to the players to finish the round after the first player
  *
- *    @return         The time left in ms
+ *	@return 		The time left in ms
  */
 Integer GetFinishTimeout() {
     declare FinishTimeout = 0;
@@ -1203,10 +1227,10 @@ Integer GetFinishTimeout() {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Check if we should go to the next match
  *
- *    @param _RoundNb        Current round number
- *    @return                        True if it is the case, false otherwise
+ *	@param _RoundNb		Current round number
+ *	@return						True if it is the case, false otherwise
  */
-Boolean MatchIsOver() {
+Boolean MatchIsOver(Integer _RoundNb) {
     if (RegistrationsAreOpen() || GetAlivePlayers() > 1) return False;
 
     return True;
@@ -1215,10 +1239,11 @@ Boolean MatchIsOver() {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Check if we should go to the next map
  *
- *    @param _RoundNb        Current round number
- *    @return                        True if it is the case, false otherwise
+ *	@param _RoundNb		Current round number
+ *	@return						True if it is the case, false otherwise
  */
-Boolean MapIsOver(Integer _RoundsPerMap) {
+Boolean MapIsOver(Integer _RoundNb, Integer _RoundsPerMap) {
+    if (MatchIsOver(_RoundNb)) return True;
     if (_RoundsPerMap > 0 && MB_GetRoundCount() >= _RoundsPerMap) return True; //< There is a rounds limit and it is reached
 
     return False;
@@ -1227,15 +1252,15 @@ Boolean MapIsOver(Integer _RoundsPerMap) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Update the scores table footer text
  *
- *    @param    _TotalRounds                            The estimated number of rounds
- *    @param    _AlivePlayers                            The number of Alive Players
- *    @param    _RoundKOs                                    The number players to eliminate this round
- *    @param    _Milestone                                Next number of players at which one less player is eliminated per round
+ *	@param	_TotalRounds							The estimated number of rounds
+ *	@param	_AlivePlayers							The number of Alive Players
+ *	@param	_RoundKOs									The number players to eliminate this round
+ *	@param	_Milestone								Next number of players at which one less player is eliminated per round
  */
 Void UpdateScoresTableFooter(Integer _CurrentRoundNb, Integer _TotalRoundsNb) {
     //L16N [Knockout]
     declare Message = "";
-    if (MatchIsOver()) {
+    if (MatchIsOver(_CurrentRoundNb)) {
         Message = _("Match is over");
     } else {
         declare AlivePlayersNb = GetAlivePlayers();
@@ -1281,19 +1306,14 @@ Void UpdateScoresTableFooter(Integer _CurrentRoundNb, Integer _TotalRoundsNb) {
     UIModules_ScoresTable::SetFooterInfo(Message);
 }
 
-Void UpdateKnockoutInfoDisplay(Integer _CurrentRoundNb, Integer _Round_EliminatedPlayersNb, Integer _AlivePlayers, Integer _RoundsPerMap, K_PlayerMapRecord[] _MapPlayerTimes) {
-    declare TotalRoundsNb = GetTotalRoundNb(_CurrentRoundNb, _AlivePlayers, _RoundsPerMap);
+Void UpdateKnockoutInfoDisplay(Integer _CurrentRoundNb, Integer _RoundsPerMap, Integer _Round_EliminatedPlayersNb, Integer _AlivePlayers, Text _Car) {
+    declare TotalRoundsNb = GetTotalRoundNb(_CurrentRoundNb);
     UIModules_KnockoutInfo::SetAlivePlayersNb(_AlivePlayers);
-    UIModules_KnockoutInfo::SetMapRoundNb(MB_GetRoundCount(), _RoundsPerMap);
-    // UIModules_KnockoutInfo::SetRoundNb(ML::FloorInteger(_CurrentRoundNb / _RoundsPerMap), ML::FloorInteger(TotalRoundsNb / _RoundsPerMap));
-    declare Integer CurrentMapNumber = _CurrentRoundNb / _RoundsPerMap;
-    if (_CurrentRoundNb != _RoundsPerMap) {
-        CurrentMapNumber += 1;
-    }
-    UIModules_KnockoutInfo::SetRoundNb(CurrentMapNumber, TotalRoundsNb / _RoundsPerMap);
+    UIModules_KnockoutInfo::SetMapRoundNb(ML::Min(_RoundsPerMap, MB_GetRoundCount()), ML::Min(_RoundsPerMap, TotalRoundsNb));
+    UIModules_KnockoutInfo::SetRoundNb(_CurrentRoundNb, TotalRoundsNb);
     UIModules_KnockoutInfo::SetKOsNumber(_Round_EliminatedPlayersNb, GetNextMilestone(_AlivePlayers));
     UIModules_KnockoutInfo::UpdateLiveRanking();
-    // UpdateCustomRanking(_MapPlayerTimes);
+    UpdateCustomRanking(_Car);
     UpdateScoresTableFooter(_CurrentRoundNb, TotalRoundsNb);
 }
 
@@ -1305,15 +1325,4 @@ Text[] RandomiseCarList(Text[] _CarList) {
         NewCarList.add(_CarList[RandomIndex]);
     }
     return NewCarList;
-}
-
-Integer FindPlayerIndex(K_PlayerMapRecord[] _MapPlayerTimes, CSmScore _Score) {
-    declare Integer PlayerScoreIndex = -1;
-    foreach (Index => MapPlayerTime in _MapPlayerTimes) {
-        if (MapPlayerTime.Player == _Score.User) {
-            PlayerScoreIndex = Index;
-            break;
-        }
-    }
-    return PlayerScoreIndex;
 }
