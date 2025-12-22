@@ -317,7 +317,7 @@ Void UpdateRanking() {
     foreach (Score in Scores) {
         if (Score.User == Null) continue;
 
-        if (Score.Points > Net_Spectate_LiveRanking_PointLimit && Score.PrevRaceTimes.count != 0) continue;
+        if (Score.Points > Net_Spectate_LiveRanking_PointLimit && Score.PrevRaceTimes.count == 0) continue;
  
         declare K_PlayerState PlayerState = K_PlayerState {
             Name = Score.User.Name,

@@ -37,7 +37,7 @@
 #Setting S_EnableJoinLeaveNotifications False
 //L16N [Knockout] Setting for the KO mode, for example if the setting is "4,16,16" it means : "4 players eliminated per round until 16 players are left (16 is written twice, so two extra players are eliminated), then 2 players eliminated per round until 4 players are left (one extra player), then 1 player eliminated per round (default)".
 #Setting S_EliminatedPlayersNbRanks "4,16,16" as _("Nb of players above which one extra elim. /round")
-#Setting S_RoundsWithoutElimination 1 as _("Rounds without elimination")
+#Setting S_RoundsWithoutElimination 0 as _("Rounds without elimination")
 
 #Setting S_EliminationMode 0 as "0 per player / 1 per lives / 2 per round"
 #Setting S_MaximumLives 3
@@ -47,6 +47,8 @@
 #Setting S_DoRestoreLife False as _("Whether to have automatic golden rounds, every round if only this is true")
 #Setting S_DoRestoreLifeFinalRound False as _("Whether to have golden rounds as final round of each map")
 #Setting S_LifeRestorationThreshold 0 as _("Minimum number of players required for a golden round, 0 is no limit")
+
+#Setting S_DoBestMapTotalTimeRestoreLife False as _("Whether to have golden lives awarded for the best total time on a map")
 
 #Setting S_AllowMoreThanMaximumLives False as _("Whether to allow players to gain more than S_MaximumLives on a golden round")
 
@@ -279,6 +281,8 @@ if (S_AdminAccountIds != "") {
 }
 declare netwrite Text[] Net_AdminAccountIds for Teams[0];
 Net_AdminAccountIds = AdminAccountIds;
+declare netwrite Text[][] Net_GoldenLifeContenders for Teams[0];
+Net_GoldenLifeContenders.clear();
 ***
 
 ***Match_StartMatch***
@@ -300,6 +304,9 @@ DisplayLiveRanking(False);
 
 ***Match_InitMap***
 ***
+declare Integer[CSmScore] MapTimes = [];
+declare CSmScore[] InvalidPlayers = [];
+Net_GoldenLifeContenders = [];
 UpdateMatchInfos(Match_CurrentRoundNb, CurrentRoundLifeGain);
 UpdateCustomRanking(False);
 UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
@@ -603,6 +610,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                     if (Score.User == Null) continue;
                     if (!ScoreIsAlive(Score)) continue;
                     RestoreLife(Score);
+                    UpdateLiveRanking();
                     break;
                 }
             //}
@@ -611,8 +619,20 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
         foreach (Score in GetPrevRaceRanking() reverse) {
             if (Score.User == Null) continue;
             if (!ScoreIsAlive(Score)) continue;
-            if (Scores::GetPlayerPrevRaceTime(Score) > 0 && LossOfLifeNb <= 0) {
-                break;
+            if (Scores::GetPlayerPrevRaceTime(Score) > 0) {
+                if (!InvalidPlayers.exists(Score)) {
+                    if (!MapTimes.existskey(Score)) {
+                        MapTimes[Score] = 0;
+                    }
+                    MapTimes[Score] = MapTimes[Score] + Scores::GetPlayerPrevRaceTime(Score);
+                }
+                if (LossOfLifeNb <= 0)
+                    continue;
+            } else if (Scores::GetPlayerPrevRaceTime(Score) <= 0) {
+                InvalidPlayers.add(Score);
+                if (MapTimes.existskey(Score)) {
+                    MapTimes.removekey(Score);
+                }
             }
 
             ConsumeLife(Score);
@@ -623,12 +643,36 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                 Scores::SetPlayerMatchPoints(Score, ParticipantsNb + 1 - Rank);
                 EliminatedAccountIds.add(Score.User.WebServicesUserId);
                 EliminatedRanks.add(Rank);
-
+                InvalidPlayers.add(Score);
+                if (MapTimes.existskey(Score)) {
+                    MapTimes.removekey(Score);
+                }
                 Rank -= 1;
             }
 
             LossOfLifeNb -= 1;
         }
+
+        declare Text[][] GoldenLifeContenders = [];
+        
+        MapTimes = MapTimes.sort();
+
+        declare Integer FastestTime = 0;
+
+        foreach (Score => Time in MapTimes) {
+            declare Text TimeText = "";
+            if (FastestTime == 0) {
+                TimeText = TL::TimeToText(Time, True, True);
+                FastestTime = Time;
+            } else {
+                TimeText = "+" ^ TimeToText(Time - FastestTime);
+            }
+            GoldenLifeContenders.add([Score.User.Name, TimeText]);
+            if (GoldenLifeContenders.count >= 3) {
+                break;
+            }
+        }
+        Net_GoldenLifeContenders = GoldenLifeContenders;
     }
 
     declare K_Callback_Elimination Callback_LostLife;
@@ -663,18 +707,31 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
     if (MapIsOver(Match_CurrentRoundNb)) {
         MB_StopMap();
     } else {
+        DisplayLiveRanking(False);
         UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::ForcedVisible;
         MB_Sleep(S_ChatTime / 2 * 1000);
         UpdateCustomRanking(False);
         MB_Sleep(S_ChatTime / 2 * 1000);
         UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
     }
-    DisplayLiveRanking(False);
 }
 ***
 
 ***Match_EndMap***
 ***
+MapTimes = MapTimes.sort();
+
+foreach (Score => Time in MapTimes) {
+
+    UIModules_BigMessage::SetMessage(Score.User.Name ^ " Wins the map!", 5000);
+    MB_Private_Sleep(2000);
+    RestoreLife(Score);
+    UpdateLiveRanking();
+    MB_Private_Sleep(2000);
+    break;
+}
+DisplayLiveRanking(False);
+
 if (MatchIsOver(Match_CurrentRoundNb)) {
     MB_StopMatch();
 } else {
@@ -1164,7 +1221,12 @@ Integer GetRoundsRemaining(Integer _CurrentRoundNb) {
         CurrentRoundNb += 1;
     }
     return RoundsRemaining;
- }
+}
+
+Void UpdateIsDoingBestMapTotalTimeRestoreLife() {
+    declare netwrite Boolean Net_DoBestMapTotalTimeRestoreLife for Teams[0];
+    Net_DoBestMapTotalTimeRestoreLife = S_DoBestMapTotalTimeRestoreLife;
+}
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /// Update LiveRanking
@@ -1271,13 +1333,6 @@ Void UpdateMatchName() {
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-// Update Match Infos
-Void UpdateMatchInfosPosition() {
-    declare netwrite Boolean Net_MultiLivesKnockout_AlternativePosition for Teams[0];
-    Net_MultiLivesKnockout_AlternativePosition = S_AlternativeMatchInfosPosition;
-}
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // Update Number of lives
 Void UpdateMaximumLives() {
     declare netwrite Integer Net_MultiLivesKnockout_LiveRanking_MaximumLives for Teams[0];
@@ -1303,16 +1358,36 @@ Void UpdateLossOfLife(Integer _LossOfLife) {
  */
 Void UpdateInterfacesInfo(Integer _CurrentRoundNb, Integer _LossOfLife, Integer _AliveScoresNb, Boolean _CurrentRoundLifeGain) {
     UpdateMatchInfos(_CurrentRoundNb, _LossOfLife, _AliveScoresNb, GetNextMilestone(_CurrentRoundNb, _AliveScoresNb), _CurrentRoundLifeGain);
-    UpdateMatchInfosPosition();
     UpdateMatchName();
     UpdateMaximumLives();
     UpdateLossOfLife(_LossOfLife);
-
+    UpdateIsDoingBestMapTotalTimeRestoreLife();
     UpdateLiveRankingInfo();
 }
 Void UpdateInterfacesInfo(Integer _CurrentRoundNb, Boolean _CurrentRoundLifeGain) {
     declare Integer AliveScoresNb = GetAliveScoresNb();
     UpdateInterfacesInfo(_CurrentRoundNb, GetLossOfLifeNb(_CurrentRoundNb, AliveScoresNb), AliveScoresNb, _CurrentRoundLifeGain);
+}
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+/** Transform delta time to pretty value
+ *
+ *    @param    _Time                                                    Display the UI or not
+ *    @return                                                             Human readable delta time
+ */
+Text TimeToText(Integer _Time) {
+    if (_Time < 1000) {
+        return TL::FormatReal(_Time / 1000., 3, False, False);
+    }
+
+    declare TimeWithoutMs = _Time / 10;
+    declare TimeInSeconds = TimeWithoutMs / 100.;
+    if (TimeInSeconds <= 10.) {
+        return TL::FormatReal(TimeInSeconds, 2, False, False);
+    } else if (TimeInSeconds <= 100.) {
+        return TL::FormatReal(TimeInSeconds, 1, False, False);
+    }
+    return TL::ToText(ML::FloorInteger(TimeInSeconds));
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1334,14 +1409,29 @@ Void LoadManialinks() {
     <label id="label-player-life-plus" pos="62.5 -2.4" size="5 4.8" halign="center" valign="center2" text="+" textsize="4.8" textfont="Nadeo/Trackmania/BebasNeueRegular" scriptevents="1" visible="0"/>
 </framemodel>
 <frame id="frame-global" hidden="1">
-    <frame id="frame-matchinfo" pos="-160 80" hidden="1">
+    <frame id="frame-matchinfo" pos="-160 50" hidden="1">
         <quad size="55 18" bgcolor="000000" opacity="0.6"/>
         <label id="label-matchinfo-name" pos="3 -6.8" size="49 6" valign="bottom" textsize="3.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
         <label id="label-matchinfo-info" pos="3 -6.8" size="49 8" textsize="1.3" maxline="5" linespacing="1.1" textfont="GameFontSemiBold" textcolor="ffffff" text="" />
     </frame>
-    <frame id=frame-golden-warning hidden="1" pos="-160 62">
+    <frame id="frame-golden-contenders" hidden="0" pos="-160 70">
+        <quad id="quad-golden-contenders-1" size="0 5" bgcolor="D4AF37" opacity="0.6" scriptevents="1"/>
+        <label id="label-golden-contenders-icon" pos="1 -1" size="5 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="1" />
+        <label id="label-golden-contenders-1" pos="5 -1" size="40 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="1" />
+        <label id="label-golden-contenders-time-1" pos="50 -1" size="49 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="1" halign="right"/>
+
+        <quad id="quad-golden-contenders-2" pos="0 0" size="55 5" bgcolor="C0C0C0" scriptevents="1" hidden="0" opacity="0.0"/>
+        <label id="label-golden-contenders-2" pos="5 -1" size="40 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0"/>
+        <label id="label-golden-contenders-delta-2" pos="50 -1" size="49 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right"/>
+
+        <quad id="quad-golden-contenders-3" pos="0 0" size="55 5" bgcolor="CD7F32" scriptevents="1" hidden="0" opacity="0.0"/>
+        <label id="label-golden-contenders-3" pos="5 -1" size="40 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0"/>
+        <label id="label-golden-contenders-delta-3" pos="50 -1" size="49 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right"/>
+        <quad id="quad-golden-life-contenders-hover" size="55 15" scriptevents="1"/>
+    </frame>
+    <frame id=frame-golden-warning hidden="1" pos="-160 55">
         <quad size="55 5" bgcolor="000000" opacity="0.6"/>
-        <label pos="3 -1" size="49 5" textsize="1.3" maxline="3" linespacing="1.1" textfont="GameFontExtraBold" textcolor="D4Af37" text="Next Round is a Golden Round" />
+        <label pos="3 -1" size="49 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="D4Af37" text="Next Round is a Golden Round" />
     </frame>
     <frame id="frame-liveranking" pos="-160 30" size="65 90" hidden="1">
         <frame pos="55 0">
@@ -1466,10 +1556,6 @@ Void UpdateMatchInfo() {
 
     declare CMlLabel Label_Name <=> (Frame.GetFirstChild("label-matchinfo-name") as CMlLabel);
     declare CMlLabel Label_Info <=> (Frame.GetFirstChild("label-matchinfo-info") as CMlLabel);
-
-    declare netread Boolean Net_MultiLivesKnockout_AlternativePosition for Teams[0];
-    if (Net_MultiLivesKnockout_AlternativePosition) Frame.RelativePosition_V3.Y = 50.;
-    else Frame.RelativePosition_V3.Y = 80.;
 
     Label_Name.Value = Net_MultiLivesKnockout_LiveRanking_MatchName;
     Tools::FitLabelValue(Label_Name, 3.5, 2., .2);
@@ -1656,7 +1742,7 @@ Void UpdateRanking() {
         declare netread Integer Net_MultiLivesKnockout_RemainingLives for Score;
         declare netread Integer Net_MultiLivesKnockout_GainedLives for Score;
         declare Integer Lives = Net_MultiLivesKnockout_RemainingLives;
-        if (Lives <= 0 && Score.PrevRaceTimes.count != 0) continue; // Skip KO player
+        if (Lives <= 0 && Score.PrevRaceTimes.count == 0) continue; // Skip KO player
 
         declare K_PlayerState PlayerState = K_PlayerState {
             Name = Score.User.Name,
@@ -1835,6 +1921,104 @@ Void UpdateRanking() {
     }
 }
 
+Void UpdateGoldenLifeContenders(Text[][] _GoldenLifeContenders) {
+    /*
+    id="frame-golden-contenders" hidde
+ad id="quad-golden-contenders-1" s
+bel id="label-golden-contenders-1"*/
+    declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
+    declare CMlQuad Quad_GoldenLifeContenders1 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-1") as CMlQuad);
+    declare CMlLabel Label_GoldenLifeContendersIcon <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-icon") as CMlLabel);
+    declare CMlLabel Label_GoldenLifeContenders1 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-1") as CMlLabel);
+    declare CMlLabel Label_GoldenLifeContendersTime1 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-time-1") as CMlLabel);
+    if (_GoldenLifeContenders.count == 0) {
+        Label_GoldenLifeContenders1.Visible = False;
+        Label_GoldenLifeContenders1.Value = "";
+        Label_GoldenLifeContendersTime1.Visible = False;
+        Label_GoldenLifeContendersTime1.Value = "";
+        Label_GoldenLifeContendersIcon.Visible = False;
+        AnimMgr.Add(Quad_GoldenLifeContenders1, "<a size=\"0 5\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        return;
+    }
+    AnimMgr.Add(Quad_GoldenLifeContenders1, "<a size=\"55 5\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    Label_GoldenLifeContendersIcon.Visible = True;
+    Label_GoldenLifeContenders1.Value = _GoldenLifeContenders[0][0];
+    Label_GoldenLifeContenders1.Visible = True;
+    Label_GoldenLifeContendersTime1.Value = _GoldenLifeContenders[0][1];
+    Label_GoldenLifeContendersTime1.Visible = True;
+
+    declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
+    declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
+    declare CMlLabel Label_GoldenLifeContendersDelta2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-2") as CMlLabel);
+
+    if (_GoldenLifeContenders.count >= 2) {
+        Label_GoldenLifeContenders2.Value = _GoldenLifeContenders[1][0];
+        Label_GoldenLifeContendersDelta2.Value = _GoldenLifeContenders[1][1];
+    } else {
+        Label_GoldenLifeContenders2.Value = "";
+        Label_GoldenLifeContendersDelta2.Value = "";
+        AnimMgr.AddChain(Quad_GoldenLifeContenders2, "<a pos=\"0 0\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContenders2, "<a pos=\"5 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContendersDelta2, "<a pos=\"50 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    }
+
+    declare CMlQuad Quad_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-3") as CMlQuad);
+    declare CMlLabel Label_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-3") as CMlLabel);
+    declare CMlLabel Label_GoldenLifeContendersDelta3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-3") as CMlLabel);
+
+    if (_GoldenLifeContenders.count >= 3) {
+        Label_GoldenLifeContenders3.Value = _GoldenLifeContenders[2][0];
+        Label_GoldenLifeContendersDelta3.Value = _GoldenLifeContenders[2][1];
+    } else {
+        Label_GoldenLifeContenders3.Value = "";
+        Label_GoldenLifeContendersDelta3.Value = "";
+        AnimMgr.AddChain(Quad_GoldenLifeContenders3, "<a pos=\"0 0\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContenders3, "<a pos=\"5 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContendersDelta3, "<a pos=\"50 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    }
+}
+
+Void ShowGoldenLifeContenders(Text[][] _GoldenLifeContenders) {
+    declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
+
+    if (_GoldenLifeContenders.count >= 2) {
+        declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
+        declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
+        declare CMlLabel Label_GoldenLifeContendersDelta2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-2") as CMlLabel);
+        AnimMgr.AddChain(Quad_GoldenLifeContenders2, "<a pos=\"0 -5\" opacity=\"0.6\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContenders2, "<a pos=\"5 -6\" opacity=\"1.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContendersDelta2, "<a pos=\"50 -6\" opacity=\"1.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    }
+
+    if (_GoldenLifeContenders.count >= 3) {
+        declare CMlQuad Quad_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-3") as CMlQuad);
+        declare CMlLabel Label_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-3") as CMlLabel);
+        declare CMlLabel Label_GoldenLifeContendersDelta3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-3") as CMlLabel);
+        AnimMgr.AddChain(Quad_GoldenLifeContenders3, "<a pos=\"0 -10\" opacity=\"0.6\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContenders3, "<a pos=\"5 -11\" opacity=\"1.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContendersDelta3, "<a pos=\"50 -11\" opacity=\"1.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    }
+
+}
+
+Void HideGoldenLifeContenders() {
+    declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
+
+    declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
+    declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
+    declare CMlLabel Label_GoldenLifeContendersDelta2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-2") as CMlLabel);
+    AnimMgr.AddChain(Quad_GoldenLifeContenders2, "<a pos=\"0 0\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    AnimMgr.AddChain(Label_GoldenLifeContenders2, "<a pos=\"5 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    AnimMgr.AddChain(Label_GoldenLifeContendersDelta2, "<a pos=\"50 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+
+    declare CMlQuad Quad_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-3") as CMlQuad);
+    declare CMlLabel Label_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-3") as CMlLabel);
+    declare CMlLabel Label_GoldenLifeContendersDelta3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-3") as CMlLabel);
+    AnimMgr.AddChain(Quad_GoldenLifeContenders3, "<a pos=\"0 0\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    AnimMgr.AddChain(Label_GoldenLifeContenders3, "<a pos=\"5 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+    AnimMgr.AddChain(Label_GoldenLifeContendersDelta3, "<a pos=\"50 -1\" opacity=\"0.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+}
+
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /** Spectate player using their login
  *
@@ -1851,6 +2035,7 @@ main() {
     declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
     declare CMlFrame Frame_LifeGain <=> (Page.GetFirstChild("frame-next-round-life-gain") as CMlFrame);
     declare CMlFrame Frame_GoldenWarning <=> (Page.GetFirstChild("frame-golden-warning") as CMlFrame);
+    declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
 
     declare CMlTextEdit TextEdit_Player_Search = (Frame_LiveRanking.GetFirstChild("textedit-player-search") as CMlTextEdit);
 
@@ -1866,6 +2051,12 @@ main() {
 
 
     declare netread Boolean Net_MultiLivesKnockout_LiveRanking_Display for Teams[0] = False;
+
+    declare netread Text[][] Net_GoldenLifeContenders for Teams[0];
+
+    declare Text[][] GoldenLifeContenders = [];
+
+    declare netread Boolean Net_DoBestMapTotalTimeRestoreLife for Teams[0];
 
     declare persistent Boolean MultiLivesKnockout_LiveRanking_IsVisible for InputPlayer.User = True;
     ToggleUI(MultiLivesKnockout_LiveRanking_IsVisible, False);
@@ -1891,6 +2082,19 @@ main() {
             UpdateMatchInfo();
         }
 
+        if (GoldenLifeContenders.count != Net_GoldenLifeContenders.count) {
+            UpdateGoldenLifeContenders(Net_GoldenLifeContenders);
+            GoldenLifeContenders = Net_GoldenLifeContenders;
+        } else if (GoldenLifeContenders.count != 0 && Net_GoldenLifeContenders.count != 0) {
+            for (I, 0, GoldenLifeContenders.count - 1) {
+                if (GoldenLifeContenders[I] != Net_GoldenLifeContenders[I]) {
+                    UpdateGoldenLifeContenders(Net_GoldenLifeContenders);
+                    GoldenLifeContenders = Net_GoldenLifeContenders;
+                    break;
+                }
+            }
+        }
+
         if (InputPlayer != GUIPlayer) {
             TextEdit_Player_Search.Visible = True;
         } else {
@@ -1913,6 +2117,8 @@ main() {
             DisplayWarning(False);
             continue;
         }
+
+        Frame_GoldenLifeContenders.Visible = Net_DoBestMapTotalTimeRestoreLife;
 
         if (Last_LiveRanking_Serial != Net_MultiLivesKnockout_LiveRanking_Serial) {
             Last_LiveRanking_Serial = Net_MultiLivesKnockout_LiveRanking_Serial;
@@ -1987,6 +2193,9 @@ main() {
                         case "label-player-life-plus": {
                             (Event.Control as CMlLabel).TextColor = CL::HexToRgb("00FF00");
                         }
+                        case "quad-golden-life-contenders-hover": {
+                            ShowGoldenLifeContenders(GoldenLifeContenders);
+                        }
                     }
                 }
                 case CMlScriptEvent::Type::MouseOut: {
@@ -2002,6 +2211,9 @@ main() {
                         }
                         case "label-player-life-plus": {
                             (Event.Control as CMlLabel).TextColor = CL::HexToRgb("FFFFFF");
+                        }
+                        case "quad-golden-life-contenders-hover": {
+                            HideGoldenLifeContenders();
                         }
                     }
                 }
