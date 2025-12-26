@@ -616,7 +616,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
             //}
         }
 
-        foreach (Score in GetPrevRaceRanking() reverse) {
+        foreach (Score in GetPrevRaceRanking()) {
             if (Score.User == Null) continue;
             if (!ScoreIsAlive(Score)) continue;
             if (Scores::GetPlayerPrevRaceTime(Score) > 0) {
@@ -626,8 +626,6 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                     }
                     MapTimes[Score] = MapTimes[Score] + Scores::GetPlayerPrevRaceTime(Score);
                 }
-                if (LossOfLifeNb <= 0)
-                    continue;
             } else if (Scores::GetPlayerPrevRaceTime(Score) <= 0) {
                 InvalidPlayers.add(Score);
                 if (MapTimes.existskey(Score)) {
@@ -635,23 +633,8 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                 }
             }
 
-            ConsumeLife(Score);
-            LostLifeAccountIds.add(Score.User.WebServicesUserId);
-
-            if (!ScoreIsAlive(Score)) {
-                // Registered Score must have at least 1 point or a best race time to not be reset at end of the map: https://forum.nadeo.com/viewtopic.php?t=4365
-                Scores::SetPlayerMatchPoints(Score, ParticipantsNb + 1 - Rank);
-                EliminatedAccountIds.add(Score.User.WebServicesUserId);
-                EliminatedRanks.add(Rank);
-                InvalidPlayers.add(Score);
-                if (MapTimes.existskey(Score)) {
-                    MapTimes.removekey(Score);
-                }
-                Rank -= 1;
-            }
-
-            LossOfLifeNb -= 1;
         }
+
 
         declare Text[][] GoldenLifeContenders = [];
         
@@ -673,6 +656,28 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
             }
         }
         Net_GoldenLifeContenders = GoldenLifeContenders;
+
+        foreach (Score in GetPrevRaceRanking() reverse) {
+            if (Score.User == Null) continue;
+            if (!ScoreIsAlive(Score)) continue;
+            if (Scores::GetPlayerPrevRaceTime(Score) > 0 && LossOfLifeNb <= 0) {
+                break;
+            }
+
+            ConsumeLife(Score);
+            LostLifeAccountIds.add(Score.User.WebServicesUserId);
+
+            if (!ScoreIsAlive(Score)) {
+                // Registered Score must have at least 1 point or a best race time to not be reset at end of the map: https://forum.nadeo.com/viewtopic.php?t=4365
+                Scores::SetPlayerMatchPoints(Score, ParticipantsNb + 1 - Rank);
+                EliminatedAccountIds.add(Score.User.WebServicesUserId);
+                EliminatedRanks.add(Rank);
+
+                Rank -= 1;
+            }
+
+            LossOfLifeNb -= 1;
+        }
     }
 
     declare K_Callback_Elimination Callback_LostLife;
@@ -865,10 +870,10 @@ Void ConsumeLife(CSmScore _Score) {
  */
 Void RestoreLife(CSmScore _Score) {
     if (_Score == Null) return;
-    if (!ScoreIsAlive(_Score)) return;
+    // if (!ScoreIsAlive(_Score)) return;
     declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
     declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
-    if (Net_MultiLivesKnockout_RemainingLives == 0) return;
+    // if (Net_MultiLivesKnockout_RemainingLives == 0) return;
     if (!S_AllowMoreThanMaximumLives && Net_MultiLivesKnockout_RemainingLives >= S_MaximumLives) return;
     if (S_MaxGainedLives > 0 && Net_MultiLivesKnockout_GainedLives >= S_MaxGainedLives) return;
     Net_MultiLivesKnockout_GainedLives += 1;
@@ -1436,20 +1441,22 @@ Void LoadManialinks() {
         <label id="label-matchinfo-name" pos="3 -6.8" size="49 6" valign="bottom" textsize="3.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
         <label id="label-matchinfo-info" pos="3 -6.8" size="49 8" textsize="1.3" maxline="5" linespacing="1.1" textfont="GameFontSemiBold" textcolor="ffffff" text="" />
     </frame>
-    <frame id="frame-golden-contenders" hidden="0" pos="-160 70">
-        <quad id="quad-golden-contenders-1" size="0 5" bgcolor="D4AF37" opacity="0.6" z-index="10"/>
-        <label id="label-golden-contenders-icon" pos="1 -1" size="5 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="1" z-index="11" textemboss=1/>
-        <label id="label-golden-contenders-1" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="1" z-index="11" textemboss=1/>
-        <label id="label-golden-contenders-time-1" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="1" halign="right" z-index="11" textemboss=1/>
+    <frame id="frame-golden-container" pos="-160 70" size="55 15">
+        <frame id="frame-golden-contenders" pos="-55 0">
+            <quad id="quad-golden-contenders-1" size="55 5" bgcolor="D4AF37" opacity="0.6" z-index="10"/>
+            <label id="label-golden-contenders-icon" pos="1 -1" size="5 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" z-index="11" textemboss=1/>
+            <label id="label-golden-contenders-1" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" z-index="11" textemboss=1/>
+            <label id="label-golden-contenders-time-1" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" halign="right" z-index="11" textemboss=1/>
 
-        <quad id="quad-golden-contenders-2" pos="0 0" size="55 5" bgcolor="C0C0C0" hidden="0" opacity="0.0" z-index="8"/>
-        <label id="label-golden-contenders-2" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="9" textemboss=1/>
-        <label id="label-golden-contenders-delta-2" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="9" textemboss=1/>
+            <quad id="quad-golden-contenders-2" pos="0 0" size="55 5" bgcolor="C0C0C0" hidden="0" opacity="0.0" z-index="8"/>
+            <label id="label-golden-contenders-2" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="9" textemboss=1/>
+            <label id="label-golden-contenders-delta-2" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="9" textemboss=1/>
 
-        <quad id="quad-golden-contenders-3" pos="0 0" size="55 5" bgcolor="CD7F32" hidden="0" opacity="0.0" z-index="6"/>
-        <label id="label-golden-contenders-3" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="7" textemboss=1/>
-        <label id="label-golden-contenders-delta-3" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="7" textemboss=1/>
-        <quad id="quad-golden-life-contenders-hover" size="55 15" scriptevents="1"/>
+            <quad id="quad-golden-contenders-3" pos="0 0" size="55 5" bgcolor="CD7F32" hidden="0" opacity="0.0" z-index="6"/>
+            <label id="label-golden-contenders-3" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="7" textemboss=1/>
+            <label id="label-golden-contenders-delta-3" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="7" textemboss=1/>
+            <quad id="quad-golden-life-contenders-hover" size="55 15" scriptevents="1"/>
+        </frame>
     </frame>
     <frame id=frame-golden-warning hidden="1" pos="-160 55">
         <quad size="55 5" bgcolor="000000" opacity="0.6"/>
@@ -1954,20 +1961,12 @@ bel id="label-golden-contenders-1"*/
     declare CMlLabel Label_GoldenLifeContenders1 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-1") as CMlLabel);
     declare CMlLabel Label_GoldenLifeContendersTime1 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-time-1") as CMlLabel);
     if (_GoldenLifeContenders.count == 0) {
-        Label_GoldenLifeContenders1.Visible = False;
-        Label_GoldenLifeContenders1.Value = "";
-        Label_GoldenLifeContendersTime1.Visible = False;
-        Label_GoldenLifeContendersTime1.Value = "";
-        Label_GoldenLifeContendersIcon.Visible = False;
-        AnimMgr.Add(Quad_GoldenLifeContenders1, "<a size=\"0 5\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.Add(Frame_GoldenLifeContenders, "<a pos=\"-55 0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
         return;
     }
-    AnimMgr.Add(Quad_GoldenLifeContenders1, "<a size=\"55 5\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
-    Label_GoldenLifeContendersIcon.Visible = True;
     Label_GoldenLifeContenders1.Value = _GoldenLifeContenders[0][0];
-    Label_GoldenLifeContenders1.Visible = True;
     Label_GoldenLifeContendersTime1.Value = _GoldenLifeContenders[0][1];
-    Label_GoldenLifeContendersTime1.Visible = True;
+    AnimMgr.Add(Frame_GoldenLifeContenders, "<a pos=\"0 0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
 
     declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
     declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
@@ -2075,7 +2074,7 @@ main() {
     declare CMlFrame Frame_LiveRanking <=> (Page.GetFirstChild("frame-liveranking") as CMlFrame);
     declare CMlFrame Frame_LifeGain <=> (Page.GetFirstChild("frame-next-round-life-gain") as CMlFrame);
     declare CMlFrame Frame_GoldenWarning <=> (Page.GetFirstChild("frame-golden-warning") as CMlFrame);
-    declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
+    declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-container") as CMlFrame);
 
     declare CMlTextEdit TextEdit_Player_Search = (Frame_LiveRanking.GetFirstChild("textedit-player-search") as CMlTextEdit);
 
