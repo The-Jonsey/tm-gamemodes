@@ -279,10 +279,12 @@ declare Text[] AdminAccountIds = [
 if (S_AdminAccountIds != "") {
     AdminAccountIds = TL::Split(",", S_AdminAccountIds);
 }
-declare netwrite Text[] Net_AdminAccountIds for Teams[0];
-Net_AdminAccountIds = AdminAccountIds;
-declare netwrite Text[][] Net_GoldenLifeContenders for Teams[0];
-Net_GoldenLifeContenders.clear();
+declare netwrite Text[] Net_MultiLivesKnockout_AdminAccountIds for Teams[0];
+Net_MultiLivesKnockout_AdminAccountIds = AdminAccountIds;
+declare netwrite Boolean Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded for Teams[0];
+declare netwrite Text[][] Net_MultiLivesKnockout_GoldenLifeContenders for Teams[0];
+Net_MultiLivesKnockout_GoldenLifeContenders.clear();
+IAssert(Net_MultiLivesKnockout_GoldenLifeContenders == [], "Golden Life Contenders Not Empty");
 ***
 
 ***Match_StartMatch***
@@ -306,7 +308,8 @@ DisplayLiveRanking(False);
 ***
 declare Integer[CSmScore] MapTimes = [];
 declare CSmScore[] InvalidPlayers = [];
-Net_GoldenLifeContenders = [];
+Net_MultiLivesKnockout_GoldenLifeContenders = [];
+IAssert(Net_MultiLivesKnockout_GoldenLifeContenders == [], "Golden Life Contenders Not Empty");
 UpdateMatchInfos(Match_CurrentRoundNb, CurrentRoundLifeGain);
 UpdateCustomRanking(False);
 UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
@@ -338,21 +341,21 @@ UpdateCustomRanking(False);
 declare Integer Round_LossOfLifeNb;
 declare Boolean Round_NeedInfoDisplayUpdate;
 
-
-declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
-CurrentRoundLifeGain = Net_NextRoundLifeGain;
+Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded = False;
+declare netwrite Boolean Net_MultiLivesKnockout_NextRoundLifeGain for Teams[0];
+CurrentRoundLifeGain = Net_MultiLivesKnockout_NextRoundLifeGain;
 declare Integer NextRoundNb = MB_GetValidRoundCount() + 1;
 if (WillMapBeOver(NextRoundNb)) {
     NextRoundNb = 1;
 }
-Net_NextRoundLifeGain = IsRestoreLifeRound(NextRoundNb, False);
+Net_MultiLivesKnockout_NextRoundLifeGain = IsRestoreLifeRound(NextRoundNb, False);
 declare Text[] AdminAccountIds = [
 ];
 if (S_AdminAccountIds != "") {
     AdminAccountIds = TL::Split(",", S_AdminAccountIds);
 }
-declare netwrite Text[] Net_AdminAccountIds for Teams[0];
-Net_AdminAccountIds = AdminAccountIds;
+declare netwrite Text[] Net_MultiLivesKnockout_AdminAccountIds for Teams[0];
+Net_MultiLivesKnockout_AdminAccountIds = AdminAccountIds;
 ***
 
 ***Rounds_CanSpawn***
@@ -522,17 +525,17 @@ foreach (Event in PendingEvents) {
 }
 
 foreach (Event in UIManager.PendingEvents) {
-    declare netwrite Text[] Net_AdminAccountIds for Teams[0];
+    declare netwrite Text[] Net_MultiLivesKnockout_AdminAccountIds for Teams[0];
     if (Event.CustomEventType == "NextRoundLifeGainEvent") {
         declare Integer NextRoundNb = MB_GetValidRoundCount() + 1;
         if (MapIsOver(NextRoundNb - 1)) {
             NextRoundNb = 1;
         }
-        if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId) && !IsRestoreLifeRound(NextRoundNb, False)) {
-            declare netwrite Boolean Net_NextRoundLifeGain for Teams[0];
-            Net_NextRoundLifeGain = !Net_NextRoundLifeGain;
+        if (Net_MultiLivesKnockout_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId) && !IsRestoreLifeRound(NextRoundNb, False)) {
+            declare netwrite Boolean Net_MultiLivesKnockout_NextRoundLifeGain for Teams[0];
+            Net_MultiLivesKnockout_NextRoundLifeGain = !Net_MultiLivesKnockout_NextRoundLifeGain;
             declare Text Message = "Next round is";
-            if (Net_NextRoundLifeGain) {
+            if (Net_MultiLivesKnockout_NextRoundLifeGain) {
                 Message ^= " a life gain round";
             } else {
                 Message ^= " not a life gain round";
@@ -541,7 +544,7 @@ foreach (Event in UIManager.PendingEvents) {
         }
 
     } else if (Event.CustomEventType == "PlayerOverrideRemoveLife") {
-        if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
+        if (Net_MultiLivesKnockout_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
             for (Score in Scores) {
                 if (Score.User.Login == Event.CustomEventData[0]) {
                     UIManager.UIAll.SendChat("Removing life from player: " ^ Score.User.Name);
@@ -551,7 +554,7 @@ foreach (Event in UIManager.PendingEvents) {
             }
         }
     } else if (Event.CustomEventType == "PlayerOverrideAddLife") {
-        if (Net_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
+        if (Net_MultiLivesKnockout_AdminAccountIds.exists(GetPlayer(Event.UI).User.WebServicesUserId)) {
             for (Score in Scores) {
                 if (Score.User.Login == Event.CustomEventData[0]) {
                     UIManager.UIAll.SendChat("Adding life to player: " ^ Score.User.Name);
@@ -648,6 +651,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                 TimeText = TL::TimeToText(Time, True, True);
                 FastestTime = Time;
             } else {
+                IAssert(Time - FastestTime >= 0, "Delta from fastest player should be greater than 0");
                 TimeText = "+" ^ TimeToText(Time - FastestTime);
             }
             GoldenLifeContenders.add([Score.User.Name, TimeText]);
@@ -655,7 +659,10 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                 break;
             }
         }
-        Net_GoldenLifeContenders = GoldenLifeContenders;
+        IAssert(GoldenLifeContenders.count <= 3, "There should be no more than 3 visible golden life contenders");
+        Net_MultiLivesKnockout_GoldenLifeContenders = GoldenLifeContenders;
+
+        Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded = True;
 
         foreach (Score in GetPrevRaceRanking() reverse) {
             if (Score.User == Null) continue;
@@ -798,6 +805,14 @@ if (!MB_Private_SkipPodiumSequence) {
 // MARK: Functions
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
+
+
+Void IAssert(Boolean _Assertion, Text _AssertionName) {
+    if (S_ScriptEnvironment == "development")
+        assert(_Assertion, _AssertionName);
+}
+
+
 /** Init player at the beginning of the match
  *
  *    @param    _Player                            Player to init
@@ -861,6 +876,7 @@ Void ConsumeLife(CSmScore _Score) {
     if (_Score == Null) return;
     declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
     Net_MultiLivesKnockout_RemainingLives -= 1;
+    IAssert(Net_MultiLivesKnockout_RemainingLives >= 0, "Remaining Lives should be greater or equal to 0");
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -870,10 +886,8 @@ Void ConsumeLife(CSmScore _Score) {
  */
 Void RestoreLife(CSmScore _Score) {
     if (_Score == Null) return;
-    // if (!ScoreIsAlive(_Score)) return;
     declare netwrite Integer Net_MultiLivesKnockout_RemainingLives for _Score;
     declare netwrite Integer Net_MultiLivesKnockout_GainedLives for _Score;
-    // if (Net_MultiLivesKnockout_RemainingLives == 0) return;
     if (!S_AllowMoreThanMaximumLives && Net_MultiLivesKnockout_RemainingLives >= S_MaximumLives) return;
     if (S_MaxGainedLives > 0 && Net_MultiLivesKnockout_GainedLives >= S_MaxGainedLives) return;
     Net_MultiLivesKnockout_GainedLives += 1;
@@ -889,6 +903,7 @@ Void ForceConsumeLife(CSmScore _Score) {
     if (Net_MultiLivesKnockout_GainedLives > 0) {
         Net_MultiLivesKnockout_GainedLives -= 1;
     }
+    IAssert(Net_MultiLivesKnockout_RemainingLives >= 0, "Remaining Lives should be greater or equal to 0");
 }
 
 Void ForceRestoreLife(CSmScore _Score) {
@@ -1251,8 +1266,8 @@ Integer GetRoundsRemaining(Integer _CurrentRoundNb) {
 }
 
 Void UpdateIsDoingBestMapTotalTimeRestoreLife() {
-    declare netwrite Boolean Net_DoBestMapTotalTimeRestoreLife for Teams[0];
-    Net_DoBestMapTotalTimeRestoreLife = S_DoBestMapTotalTimeRestoreLife;
+    declare netwrite Boolean Net_MultiLivesKnockout_DoBestMapTotalTimeRestoreLife for Teams[0];
+    Net_MultiLivesKnockout_DoBestMapTotalTimeRestoreLife = S_DoBestMapTotalTimeRestoreLife;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -1416,6 +1431,7 @@ Text TimeToText(Integer _Time) {
     }
     return TL::ToText(ML::FloorInteger(TimeInSeconds));
 }
+
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
 /// Load Manialinks
@@ -1702,8 +1718,8 @@ Void UpdateRankingPlayer(CMlControl _Control_Player, K_PlayerState _PlayerState)
     declare CMlLabel Label_PlayerLifeMinus = Frame_Player.GetFirstChild("label-player-life-minus") as CMlLabel;
     declare CMlLabel Label_PlayerLifePlus = Frame_Player.GetFirstChild("label-player-life-plus") as CMlLabel;
 
-    declare netread Text[] Net_AdminAccountIds for Teams[0];
-    if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+    declare netread Text[] Net_MultiLivesKnockout_AdminAccountIds for Teams[0];
+    if (Net_MultiLivesKnockout_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
         Quad_PlayerLifeControls_Background.Visible = True;
         Label_PlayerLifeMinus.Visible = True;
         Label_PlayerLifePlus.Visible = True;
@@ -2083,7 +2099,7 @@ main() {
 
     Frame_Global.Visible = True;
 
-    declare netread Text[] Net_AdminAccountIds for Teams[0];
+    declare netread Text[] Net_MultiLivesKnockout_AdminAccountIds for Teams[0];
 
     declare Text[] AdminAccountIds;
 
@@ -2091,11 +2107,11 @@ main() {
 
     declare netread Boolean Net_MultiLivesKnockout_LiveRanking_Display for Teams[0] = False;
 
-    declare netread Text[][] Net_GoldenLifeContenders for Teams[0];
+    declare netread Text[][] Net_MultiLivesKnockout_GoldenLifeContenders for Teams[0];
 
     declare Text[][] GoldenLifeContenders = [];
 
-    declare netread Boolean Net_DoBestMapTotalTimeRestoreLife for Teams[0];
+    declare netread Boolean Net_MultiLivesKnockout_DoBestMapTotalTimeRestoreLife for Teams[0];
 
     declare persistent Boolean MultiLivesKnockout_LiveRanking_IsVisible for InputPlayer.User = True;
     ToggleUI(MultiLivesKnockout_LiveRanking_IsVisible, False);
@@ -2105,6 +2121,13 @@ main() {
 
     declare netread Integer Net_MultiLivesKnockout_LiveRanking_Serial for Teams[0];
     declare Integer Last_LiveRanking_Serial;
+
+    declare netread Boolean Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded for Teams[0];
+
+    declare Boolean GoldenLifeContendersExpanded = False;
+
+    declare Boolean GoldenLifeContendersShouldShow_Previous = False;
+    declare Boolean GoldenLifeContendersShouldShow = False;
 
     declare Ident Last_GUIPlayer;
 
@@ -2121,17 +2144,32 @@ main() {
             UpdateMatchInfo();
         }
 
-        if (GoldenLifeContenders.count != Net_GoldenLifeContenders.count) {
-            UpdateGoldenLifeContenders(Net_GoldenLifeContenders);
-            GoldenLifeContenders = Net_GoldenLifeContenders;
-        } else if (GoldenLifeContenders.count != 0 && Net_GoldenLifeContenders.count != 0) {
+        if (GoldenLifeContenders.count != Net_MultiLivesKnockout_GoldenLifeContenders.count) {
+            UpdateGoldenLifeContenders(Net_MultiLivesKnockout_GoldenLifeContenders);
+            GoldenLifeContenders = Net_MultiLivesKnockout_GoldenLifeContenders;
+        } else if (GoldenLifeContenders.count != 0 && Net_MultiLivesKnockout_GoldenLifeContenders.count != 0) {
             for (I, 0, GoldenLifeContenders.count - 1) {
-                if (GoldenLifeContenders[I] != Net_GoldenLifeContenders[I]) {
-                    UpdateGoldenLifeContenders(Net_GoldenLifeContenders);
-                    GoldenLifeContenders = Net_GoldenLifeContenders;
+                if (GoldenLifeContenders[I] != Net_MultiLivesKnockout_GoldenLifeContenders[I]) {
+                    UpdateGoldenLifeContenders(Net_MultiLivesKnockout_GoldenLifeContenders);
+                    GoldenLifeContenders = Net_MultiLivesKnockout_GoldenLifeContenders;
                     break;
                 }
             }
+        }
+
+        if (Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded || GoldenLifeContendersExpanded) {
+            GoldenLifeContendersShouldShow = True;
+        } else if (!Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded && !GoldenLifeContendersExpanded) {
+            GoldenLifeContendersShouldShow = False;
+        }
+
+        if (GoldenLifeContendersShouldShow != GoldenLifeContendersShouldShow_Previous) {
+            if (GoldenLifeContendersShouldShow) {
+                ShowGoldenLifeContenders(GoldenLifeContenders);
+            } else {
+                HideGoldenLifeContenders();
+            }
+            GoldenLifeContendersShouldShow_Previous = GoldenLifeContendersShouldShow;
         }
 
         if (InputPlayer != GUIPlayer) {
@@ -2142,13 +2180,13 @@ main() {
         }
 
 
-        if (AdminAccountIds != Net_AdminAccountIds) {
-            if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+        if (AdminAccountIds != Net_MultiLivesKnockout_AdminAccountIds) {
+            if (Net_MultiLivesKnockout_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
                 Frame_LifeGain.Visible = True;
             } else {
                 Frame_LifeGain.Visible = False;
             }
-            AdminAccountIds = Net_AdminAccountIds;
+            AdminAccountIds = Net_MultiLivesKnockout_AdminAccountIds;
         }
 
         Frame_LiveRanking.Visible = Net_MultiLivesKnockout_LiveRanking_Display;
@@ -2157,21 +2195,21 @@ main() {
             continue;
         }
 
-        Frame_GoldenLifeContenders.Visible = Net_DoBestMapTotalTimeRestoreLife;
+        Frame_GoldenLifeContenders.Visible = Net_MultiLivesKnockout_DoBestMapTotalTimeRestoreLife;
 
         if (Last_LiveRanking_Serial != Net_MultiLivesKnockout_LiveRanking_Serial) {
             Last_LiveRanking_Serial = Net_MultiLivesKnockout_LiveRanking_Serial;
             UpdateLiveRanking = True;
         }
 
-        declare netread Boolean Net_NextRoundLifeGain for Teams[0];
+        declare netread Boolean Net_MultiLivesKnockout_NextRoundLifeGain for Teams[0];
 
         //next-round-life-gain
         declare CMlFrame Frame_NRLG <=> (Page.GetFirstChild("frame-next-round-life-gain") as CMlFrame);
         declare CMlQuad Quad_NRLG <=> (Frame_NRLG.GetFirstChild("quad-next-round-life-gain") as CMlQuad);
         declare CMlLabel Label_NRLG <=> (Frame_NRLG.GetFirstChild("label-next-round-life-gain") as CMlLabel);
 
-        if (Net_NextRoundLifeGain) {
+        if (Net_MultiLivesKnockout_NextRoundLifeGain) {
             Quad_NRLG.BgColor = CL::HexToRgb("00FF00");
             Label_NRLG.Value = "Next Round Gain\nEnabled";
             Frame_GoldenWarning.Visible = True;
@@ -2204,14 +2242,14 @@ main() {
                         case "label-player-life-minus": {
                             declare CMlQuad Button <=> (Event.Control.Parent.GetFirstChild("quad-player-button") as CMlQuad);
                             declare Text Quad_Login for Button = "";
-                            if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+                            if (Net_MultiLivesKnockout_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
                                 SendCustomEvent("PlayerOverrideRemoveLife", [Quad_Login]);
                             }
                         }
                         case "label-player-life-plus": {
                             declare CMlQuad Button <=> (Event.Control.Parent.GetFirstChild("quad-player-button") as CMlQuad);
                             declare Text Quad_Login for Button = "";
-                            if (Net_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
+                            if (Net_MultiLivesKnockout_AdminAccountIds.exists(InputPlayer.User.WebServicesUserId)) {
                                 SendCustomEvent("PlayerOverrideAddLife", [Quad_Login]);
                             }
                         }
@@ -2233,7 +2271,9 @@ main() {
                             (Event.Control as CMlLabel).TextColor = CL::HexToRgb("00FF00");
                         }
                         case "quad-golden-life-contenders-hover": {
-                            ShowGoldenLifeContenders(GoldenLifeContenders);
+                            // ShowGoldenLifeContenders(GoldenLifeContenders);
+                            GoldenLifeContendersExpanded = True;
+                            log("GoldenLifeContendersExpanded = True");
                         }
                     }
                 }
@@ -2252,7 +2292,9 @@ main() {
                             (Event.Control as CMlLabel).TextColor = CL::HexToRgb("FFFFFF");
                         }
                         case "quad-golden-life-contenders-hover": {
-                            HideGoldenLifeContenders();
+                            // HideGoldenLifeContenders();
+                            GoldenLifeContendersExpanded = False;
+                            log("GoldenLifeContendersExpanded = False");
                         }
                     }
                 }
