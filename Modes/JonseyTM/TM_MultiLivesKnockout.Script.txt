@@ -737,30 +737,33 @@ declare CSmScore[] Recipients = [];
 
 declare Integer FastestTime = -1;
 
-foreach (Score => Time in MapTimes) {
+if (S_DoBestMapTotalTimeRestoreLife) {
 
-    if (FastestTime == -1) {
-        FastestTime = Time;
+    foreach (Score => Time in MapTimes) {
+    
+        if (FastestTime == -1) {
+            FastestTime = Time;
+        }
+    
+        if (Time == FastestTime) {
+            Recipients.add(Score);
+        } else {
+            break;
+        }
     }
-
-    if (Time == FastestTime) {
-        Recipients.add(Score);
-    } else {
-        break;
+    
+    declare Text[] Names = [];
+    
+    foreach (Score in Recipients) {
+        Names.add(Score.User.Name);
     }
-}
-
-declare Text[] Names = [];
-
-foreach (Score in Recipients) {
-    Names.add(Score.User.Name);
-}
-
-
-UIModules_BigMessage::SetMessage(TL::Join(", ", Names) ^ " Wins the map!", 5000);
-MB_Private_Sleep(2000);
-foreach (Score in Recipients) {
-    RestoreLife(Score);
+    
+    
+    UIModules_BigMessage::SetMessage(TL::Join(", ", Names) ^ " Wins the map!", 5000);
+    MB_Private_Sleep(2000);
+    foreach (Score in Recipients) {
+        RestoreLife(Score);
+    }
 }
 UpdateLiveRanking();
 MB_Private_Sleep(2000);
