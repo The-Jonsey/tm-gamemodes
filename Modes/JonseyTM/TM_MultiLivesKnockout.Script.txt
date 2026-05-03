@@ -638,6 +638,31 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
 
         }
 
+        foreach (Score in GetPrevRaceRanking() reverse) {
+            if (Score.User == Null) continue;
+            if (!ScoreIsAlive(Score)) continue;
+            if (Scores::GetPlayerPrevRaceTime(Score) > 0 && LossOfLifeNb <= 0) {
+                break;
+            }
+
+            ConsumeLife(Score);
+            LostLifeAccountIds.add(Score.User.WebServicesUserId);
+
+            if (!ScoreIsAlive(Score)) {
+                // Registered Score must have at least 1 point or a best race time to not be reset at end of the map: https://forum.nadeo.com/viewtopic.php?t=4365
+                Scores::SetPlayerMatchPoints(Score, ParticipantsNb + 1 - Rank);
+                EliminatedAccountIds.add(Score.User.WebServicesUserId);
+                EliminatedRanks.add(Rank);
+
+                Rank -= 1;
+
+                if (MB_GetValidRoundCount() != S_RoundsPerMap) {
+                    MapTimes.removekey(Score);
+                }
+            }
+
+            LossOfLifeNb -= 1;
+        }
 
         declare Text[][] GoldenLifeContenders = [];
         
@@ -659,32 +684,11 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                 break;
             }
         }
+        
         IAssert(GoldenLifeContenders.count <= 3, "There should be no more than 3 visible golden life contenders");
         Net_MultiLivesKnockout_GoldenLifeContenders = GoldenLifeContenders;
 
         Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded = True;
-
-        foreach (Score in GetPrevRaceRanking() reverse) {
-            if (Score.User == Null) continue;
-            if (!ScoreIsAlive(Score)) continue;
-            if (Scores::GetPlayerPrevRaceTime(Score) > 0 && LossOfLifeNb <= 0) {
-                break;
-            }
-
-            ConsumeLife(Score);
-            LostLifeAccountIds.add(Score.User.WebServicesUserId);
-
-            if (!ScoreIsAlive(Score)) {
-                // Registered Score must have at least 1 point or a best race time to not be reset at end of the map: https://forum.nadeo.com/viewtopic.php?t=4365
-                Scores::SetPlayerMatchPoints(Score, ParticipantsNb + 1 - Rank);
-                EliminatedAccountIds.add(Score.User.WebServicesUserId);
-                EliminatedRanks.add(Rank);
-
-                Rank -= 1;
-            }
-
-            LossOfLifeNb -= 1;
-        }
     }
 
     declare K_Callback_Elimination Callback_LostLife;
