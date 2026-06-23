@@ -4,7 +4,7 @@
 #Extends "Modes/Nadeo/Trackmania/Base/TrackmaniaRoundsBase.Script.txt"
 
 #Const    CompatibleMapTypes    "TrackMania\\TM_Race,TM_Race"
-#Const    Version                            "2026-01-15+4"
+#Const    Version                            "2026-06-23"
 #Const    ScriptName                    "Modes/TM2020-Gamemodes/TM_MultiLivesKnockout.Script.txt"
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -300,7 +300,7 @@ foreach (Score in Scores) {
 
     Net_MultiLivesKnockout_GainedLives = 0;
 }
-UpdateCustomRanking(False);
+UpdateCustomRanking(0, []);
 DisplayLiveRanking(False);
 ***
 
@@ -311,7 +311,7 @@ declare CSmScore[] InvalidPlayers = [];
 Net_MultiLivesKnockout_GoldenLifeContenders = [];
 IAssert(Net_MultiLivesKnockout_GoldenLifeContenders == [], "Golden Life Contenders Not Empty");
 UpdateMatchInfos(Match_CurrentRoundNb, CurrentRoundLifeGain);
-UpdateCustomRanking(False);
+UpdateCustomRanking(0, MapTimes);
 UIModules_ScoresTable::SetScoreMode(UIModules_ScoresTable::C_Mode_PrevTime);
 ***
 
@@ -333,7 +333,7 @@ if (S_WarmUpNb > 0) {
     UpdateInterfacesInfo(Match_CurrentRoundNb, CurrentRoundLifeGain);
 }
 
-UpdateCustomRanking(False);
+UpdateCustomRanking(0, MapTimes);
 ***
 
 ***Match_InitRound***
@@ -439,7 +439,7 @@ UIModules_BestRaceViewer::SetPrevDisplay(False);
 
 UpdateLiveRanking();
 DisplayLiveRanking(True);
-UpdateCustomRanking(True);
+UpdateCustomRanking(1, MapTimes);
 UpdateInterfacesInfo(Match_CurrentRoundNb, CurrentRoundLifeGain);
 Round_NeedInfoDisplayUpdate = False;
 
@@ -472,7 +472,7 @@ foreach (Player in Players) {
     }
 }
 if (Round_NeedInfoDisplayUpdate) {
-    UpdateCustomRanking(True);
+    UpdateCustomRanking(1, MapTimes);
     UpdateInterfacesInfo(Match_CurrentRoundNb, CurrentRoundLifeGain);
     Round_NeedInfoDisplayUpdate = False;
 }
@@ -509,7 +509,7 @@ foreach (Event in RacePendingEvents) {
                 }
 
                 UIModules_BestRaceViewer::SetPrevDisplay(Event.Player, True);
-                UpdateCustomRanking(True);
+                UpdateCustomRanking(1, MapTimes);
             }
             if (Event.IsEndLap) {
                 Scores::UpdatePlayerBestLapIfBetter(Event.Player);
@@ -680,12 +680,12 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
                 TimeText = "+" ^ TimeToText(Time - FastestTime);
             }
             GoldenLifeContenders.add([Score.User.Name, TimeText]);
-            if (GoldenLifeContenders.count >= 3) {
+            if (GoldenLifeContenders.count >= 5) {
                 break;
             }
         }
         
-        IAssert(GoldenLifeContenders.count <= 3, "There should be no more than 3 visible golden life contenders");
+        IAssert(GoldenLifeContenders.count <= 5, "There should be no more than 5 visible golden life contenders");
         Net_MultiLivesKnockout_GoldenLifeContenders = GoldenLifeContenders;
 
         Net_MultiLivesKnockout_IsGoldenLifeContendersExpanded = True;
@@ -701,7 +701,7 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
     // Send Trophies, uses EliminatedAccountIds array
     +++Match_EndRound_AfterComputeScores+++
 
-    UpdateCustomRanking(True);
+    UpdateCustomRanking(0, MapTimes);
     UpdateMatchInfos(Match_CurrentRoundNb, CurrentRoundLifeGain);
 
     // The UI display "no elimination during the FIRST round" when no elimination. So to prevent confusion, i disable it
@@ -726,8 +726,12 @@ if (Round_ForceEndRound || Round_SkipPauseRound || Round_Skipped) {
         DisplayLiveRanking(False);
         UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::ForcedVisible;
         MB_Sleep(S_ChatTime / 2 * 1000);
-        UpdateCustomRanking(False);
+        UpdateCustomRanking(1, MapTimes);
         MB_Sleep(S_ChatTime / 2 * 1000);
+        if (S_DoBestMapTotalTimeRestoreLife == True && MapTimes.count > 0) {
+            UpdateCustomRanking(2, MapTimes);
+            MB_Sleep(S_ChatTime / 3 * 1000);
+        }
         UIManager.UIAll.ScoreTableVisibility = CUIConfig::EVisibility::Normal;
     }
 }
@@ -1064,47 +1068,78 @@ Text GetScoreRemainingLivesText(CSmScore _Score) {
     return Result;
 }
 
-Void UpdateCustomRanking(Boolean _DisplayTimes) {
+Void UpdateCustomRanking(Integer _DisplayMode, Integer[CSmScore] _MapTimes) {
     declare Text[] AccountIdsToDisplay = [];
     declare Text[][Text] CustomPoints = [];
 
     declare Integer ParticipantsNb = GetParticipantsNb();
     declare Integer AliveScoresNb = GetAliveScoresNb();
 
-    foreach (Index => Score in GetPrevRaceRanking() reverse) {
-        if (Score == Null) continue;
-        if (Score.User == Null) continue;
-        if (!ScoreIsRegistered(Score)) continue;
-        AccountIdsToDisplay.add(Score.User.WebServicesUserId);
-        if (!ScoreIsAlive(Score)) continue;
+    if (_DisplayMode != 2) {
+        foreach (Index => Score in GetPrevRaceRanking() reverse) {
+            if (Score == Null) continue;
+            if (Score.User == Null) continue;
+            if (!ScoreIsRegistered(Score)) continue;
+            AccountIdsToDisplay.add(Score.User.WebServicesUserId);
+            if (!ScoreIsAlive(Score)) continue;
 
-        if (_DisplayTimes) {
-            Scores::SetPlayerMatchPoints(Score, ParticipantsNb + ParticipantsNb - Index);
-        } else {
-            Scores::SetPlayerMatchPoints(Score, ParticipantsNb + GetScoreRemainingLives(Score));
-            CustomPoints[Score.User.WebServicesUserId] = [GetScoreRemainingLivesText(Score)];
+            if (_DisplayMode == 0) {
+                Scores::SetPlayerMatchPoints(Score, ParticipantsNb + ParticipantsNb - Index);
+            } else if (_DisplayMode == 1) {
+                Scores::SetPlayerMatchPoints(Score, ParticipantsNb + GetScoreRemainingLives(Score));
+                CustomPoints[Score.User.WebServicesUserId] = [GetScoreRemainingLivesText(Score)];
+            }
+            if (AliveScoresNb == 1 && ParticipantsNb > 1) {
+                CustomPoints[Score.User.WebServicesUserId] = [_("|Status|Winner"), "0f0"];
+            }
         }
-        if (AliveScoresNb == 1 && ParticipantsNb > 1) {
-            CustomPoints[Score.User.WebServicesUserId] = [_("|Status|Winner"), "0f0"];
+
+        declare Integer Rank = 1;
+        declare Text[Text] CustomRanks = [];
+        Race::SortScores(Race::C_Sort_TotalPoints);
+        foreach (Score in Scores) {
+            if (AliveScoresNb == 1 && ScoreIsAlive(Score)) {
+                CustomRanks[Score.User.WebServicesUserId] = "1";
+            } else if (ScoreIsAlive(Score)) {
+                CustomRanks[Score.User.WebServicesUserId] = "-";
+            } else if (ScoreIsRegistered(Score)) {
+                CustomRanks[Score.User.WebServicesUserId] = ""^Rank;
+                CustomPoints[Score.User.WebServicesUserId] = [_("|Status|K.O."), "f00"];
+            }
+            Rank += 1;
+        }
+
+        UIModules_ScoresTable::SetCustomRanks(CustomRanks);
+    } else {
+        if (_MapTimes.count == 0) {
+            return;
+        }
+        declare Integer[CSmScore] LocalMapTimes = _MapTimes.sort();
+        declare Integer MinTime = -1; 
+        foreach (Score => Time in LocalMapTimes) {
+            if (Time < MinTime || MinTime == -1) {
+                MinTime = Time;
+            }
+        }
+        declare Boolean InitialTimeSet = False;
+        foreach (Score => Time in LocalMapTimes) {
+            Scores::SetPlayerMatchPoints(Score, MinTime - Time);
+            if (Time == MinTime && !InitialTimeSet) {
+                CustomPoints[Score.User.WebServicesUserId] = [TL::TimeToText(Time, True, True)];
+                Scores::SetPlayerMatchPoints(Score, (MinTime - Time) + 1);
+                InitialTimeSet = True;
+            } else {
+                CustomPoints[Score.User.WebServicesUserId] = ["+" ^ TL::TimeToText(Time - MinTime, True, True)];
+            }
+        }
+        foreach (Score in Scores) {
+            if (!LocalMapTimes.existskey(Score) || LocalMapTimes[Score] == 0) {
+                Scores::SetPlayerMatchPoints(Score, 0);
+            } else {
+                AccountIdsToDisplay.add(Score.User.WebServicesUserId);
+            }
         }
     }
-
-    declare Integer Rank = 1;
-    declare Text[Text] CustomRanks = [];
-    Race::SortScores(Race::C_Sort_TotalPoints);
-    foreach (Score in Scores) {
-        if (AliveScoresNb == 1 && ScoreIsAlive(Score)) {
-            CustomRanks[Score.User.WebServicesUserId] = "1";
-        } else if (ScoreIsAlive(Score)) {
-            CustomRanks[Score.User.WebServicesUserId] = "-";
-        } else if (ScoreIsRegistered(Score)) {
-            CustomRanks[Score.User.WebServicesUserId] = ""^Rank;
-            CustomPoints[Score.User.WebServicesUserId] = [_("|Status|K.O."), "f00"];
-        }
-        Rank += 1;
-    }
-
-    UIModules_ScoresTable::SetCustomRanks(CustomRanks);
     UIModules_ScoresTable::DisplayOnly(AccountIdsToDisplay); // Display only registered players
     UIModules_ScoresTable::SetCustomPoints(CustomPoints);
 }
@@ -1318,7 +1353,7 @@ Void LoadManialinks() {
         <label id="label-matchinfo-name" pos="3 -6.8" size="49 6" valign="bottom" textsize="3.5" textfont="GameFontExtraBold" textcolor="ffffff" text=""/>
         <label id="label-matchinfo-info" pos="3 -6.8" size="49 8" textsize="1.3" maxline="5" linespacing="1.1" textfont="GameFontSemiBold" textcolor="ffffff" text="" />
     </frame>
-    <frame id="frame-golden-container" pos="-160 70" size="55 15">
+    <frame id="frame-golden-container" pos="-160 80" size="55 25">
         <frame id="frame-golden-contenders" pos="-55 0">
             <quad id="quad-golden-contenders-1" size="55 5" bgcolor="D4AF37" opacity="0.6" z-index="10"/>
             <label id="label-golden-contenders-icon" pos="1 -1" size="5 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" z-index="11" textemboss=1/>
@@ -1327,11 +1362,19 @@ Void LoadManialinks() {
 
             <quad id="quad-golden-contenders-2" pos="0 0" size="55 5" bgcolor="C0C0C0" hidden="0" opacity="0.0" z-index="8"/>
             <label id="label-golden-contenders-2" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="9" textemboss=1/>
-            <label id="label-golden-contenders-delta-2" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="9" textemboss=1/>
+            <label id="label-golden-contenders-time-2" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="9" textemboss=1/>
 
             <quad id="quad-golden-contenders-3" pos="0 0" size="55 5" bgcolor="CD7F32" hidden="0" opacity="0.0" z-index="6"/>
             <label id="label-golden-contenders-3" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="7" textemboss=1/>
-            <label id="label-golden-contenders-delta-3" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="7" textemboss=1/>
+            <label id="label-golden-contenders-time-3" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="7" textemboss=1/>
+
+            <quad id="quad-golden-contenders-4" pos="0 0" size="55 5" bgcolor="333333" hidden="0" opacity="0.0" z-index="6"/>
+            <label id="label-golden-contenders-4" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="7" textemboss=1/>
+            <label id="label-golden-contenders-time-4" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="7" textemboss=1/>
+
+            <quad id="quad-golden-contenders-5" pos="0 0" size="55 5" bgcolor="333333" hidden="0" opacity="0.0" z-index="6"/>
+            <label id="label-golden-contenders-5" pos="5 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" z-index="7" textemboss=1/>
+            <label id="label-golden-contenders-time-5" pos="50 -1" size="20 5" textsize="1.3" maxline="1" linespacing="1.1" textfont="GameFontExtraBold" textcolor="FFFFFF" text="" hidden="0" opacity="0.0" halign="right" z-index="7" textemboss=1/>
             <quad id="quad-golden-life-contenders-hover" size="55 15" scriptevents="1"/>
         </frame>
     </frame>
@@ -1555,13 +1598,16 @@ Void UpdateRankingPlayer(CMlControl _Control_Player, K_PlayerState _PlayerState)
 
         declare Integer NonGoldenLives = _PlayerState.Lives - _PlayerState.GainedLives;
 
-        for (I, 1, NonGoldenLives) {
-            Result ^= " ";
+        if (_PlayerState.Lives > 0) {
+            for (I, 1, NonGoldenLives) {
+                Result ^= " ";
+            }
+
+            for (I, 1, _PlayerState.Lives - NonGoldenLives) {
+                Result ^= "$DB3 $g";
+            }
         }
 
-        for (I, 1, _PlayerState.Lives - NonGoldenLives) {
-            Result ^= "$DB3 $g";
-        }
         Label_Player_Lives.Value = Result;
         declare Real LabelSize = ML::Max(_PlayerState.Lives, Net_MultiLivesKnockout_LiveRanking_MaximumLives + _PlayerState.GainedLives) * 3.;
         Label_Player_Lives.Size = <LabelSize, 5.>;
@@ -1828,111 +1874,66 @@ Void UpdateRanking() {
 }
 
 Void UpdateGoldenLifeContenders(Text[][] _GoldenLifeContenders) {
-    /*
-    id="frame-golden-contenders" hidde
-ad id="quad-golden-contenders-1" s
-bel id="label-golden-contenders-1"*/
     declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
-    declare CMlQuad Quad_GoldenLifeContenders1 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-1") as CMlQuad);
-    declare CMlLabel Label_GoldenLifeContendersIcon <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-icon") as CMlLabel);
-    declare CMlLabel Label_GoldenLifeContenders1 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-1") as CMlLabel);
-    declare CMlLabel Label_GoldenLifeContendersTime1 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-time-1") as CMlLabel);
+
     if (_GoldenLifeContenders.count == 0) {
         AnimMgr.Add(Frame_GoldenLifeContenders, "<a pos=\"-55 0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
-        return;
+        return; 
     }
-    Label_GoldenLifeContenders1.Value = _GoldenLifeContenders[0][0];
-    Label_GoldenLifeContendersTime1.Value = _GoldenLifeContenders[0][1];
     AnimMgr.Add(Frame_GoldenLifeContenders, "<a pos=\"0 0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
 
-    declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
-    declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
-    declare CMlLabel Label_GoldenLifeContendersDelta2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-2") as CMlLabel);
+    for (I, 0, _GoldenLifeContenders.count - 1) {
+        declare Text[] GoldenLifeContender = _GoldenLifeContenders[I];
 
-    if (_GoldenLifeContenders.count >= 2) {
-        Label_GoldenLifeContenders2.Value = _GoldenLifeContenders[1][0];
-        Label_GoldenLifeContendersDelta2.Value = _GoldenLifeContenders[1][1];
-    } else {
-        Label_GoldenLifeContenders2.Value = "";
-        Label_GoldenLifeContendersDelta2.Value = "";
-        AnimMgr.Flush(Quad_GoldenLifeContenders2);
-        AnimMgr.Flush(Label_GoldenLifeContenders2);
-        AnimMgr.Flush(Label_GoldenLifeContendersDelta2);
-        AnimMgr.Add(Quad_GoldenLifeContenders2, "<a pos=\"0 0\" opacity=\"0.0\"/>", Now+200, 250, CAnimManager::EAnimManagerEasing::QuadOut);
-        AnimMgr.Add(Label_GoldenLifeContenders2, "<a pos=\"5 -1\" opacity=\"0.0\"/>", Now+200, 250, CAnimManager::EAnimManagerEasing::QuadOut);
-        AnimMgr.Add(Label_GoldenLifeContendersDelta2, "<a pos=\"50 -1\" opacity=\"0.0\"/>", Now+200, 250, CAnimManager::EAnimManagerEasing::QuadOut);
-    }
+        declare CMlLabel Label_GoldenLifeContender <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-" ^ TL::ToText(I + 1)) as CMlLabel);
+        declare CMlLabel Label_GoldenLifeContenderTime <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-time-" ^ TL::ToText(I + 1)) as CMlLabel);
 
-    declare CMlQuad Quad_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-3") as CMlQuad);
-    declare CMlLabel Label_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-3") as CMlLabel);
-    declare CMlLabel Label_GoldenLifeContendersDelta3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-3") as CMlLabel);
-
-    if (_GoldenLifeContenders.count >= 3) {
-        Label_GoldenLifeContenders3.Value = _GoldenLifeContenders[2][0];
-        Label_GoldenLifeContendersDelta3.Value = _GoldenLifeContenders[2][1];
-    } else {
-        Label_GoldenLifeContenders3.Value = "";
-        Label_GoldenLifeContendersDelta3.Value = "";
-        AnimMgr.Flush(Quad_GoldenLifeContenders3);
-        AnimMgr.Flush(Label_GoldenLifeContenders3);
-        AnimMgr.Flush(Label_GoldenLifeContendersDelta3);
-        AnimMgr.AddChain(Quad_GoldenLifeContenders3, "<a pos=\"0 0\" opacity=\"0.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadOut);
-        AnimMgr.AddChain(Label_GoldenLifeContenders3, "<a pos=\"5 -1\" opacity=\"0.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadOut);
-        AnimMgr.AddChain(Label_GoldenLifeContendersDelta3, "<a pos=\"50 -1\" opacity=\"0.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadOut);
+        Label_GoldenLifeContender.Value = GoldenLifeContender[0];
+        Label_GoldenLifeContenderTime.Value = GoldenLifeContender[1];
     }
 }
 
 Void ShowGoldenLifeContenders(Text[][] _GoldenLifeContenders) {
     declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
+    declare Integer Interval = 500 / ML::Max(_GoldenLifeContenders.count - 1, 1);
+    declare Integer Height = 5;
 
-    if (_GoldenLifeContenders.count >= 2) {
-        declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
-        declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
-        declare CMlLabel Label_GoldenLifeContendersDelta2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-2") as CMlLabel);
-        AnimMgr.Flush(Quad_GoldenLifeContenders2);
-        AnimMgr.Flush(Label_GoldenLifeContenders2);
-        AnimMgr.Flush(Label_GoldenLifeContendersDelta2);
-        AnimMgr.AddChain(Quad_GoldenLifeContenders2, "<a pos=\"0 -5\" opacity=\"0.6\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
-        AnimMgr.AddChain(Label_GoldenLifeContenders2, "<a pos=\"5 -6\" opacity=\"1.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
-        AnimMgr.AddChain(Label_GoldenLifeContendersDelta2, "<a pos=\"50 -6\" opacity=\"1.0\"/>", 250, CAnimManager::EAnimManagerEasing::QuadInOut);
-    }
+    for (I, 1, _GoldenLifeContenders.count - 1) {
+        declare CMlQuad Quad_GoldenLifeContender <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-" ^ TL::ToText(I + 1)) as CMlQuad);
+        declare CMlLabel Label_GoldenLifeContender <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-" ^ TL::ToText(I + 1)) as CMlLabel);
+        declare CMlLabel Label_GoldenLifeContenderTime <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-time-" ^ TL::ToText(I + 1)) as CMlLabel);
 
-    if (_GoldenLifeContenders.count >= 3) {
-        declare CMlQuad Quad_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-3") as CMlQuad);
-        declare CMlLabel Label_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-3") as CMlLabel);
-        declare CMlLabel Label_GoldenLifeContendersDelta3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-3") as CMlLabel);
-        AnimMgr.Flush(Quad_GoldenLifeContenders3);
-        AnimMgr.Flush(Label_GoldenLifeContenders3);
-        AnimMgr.Flush(Label_GoldenLifeContendersDelta3);
-        AnimMgr.AddChain(Quad_GoldenLifeContenders3, "<a pos=\"0 -10\" opacity=\"0.6\"/>", 500, CAnimManager::EAnimManagerEasing::QuadInOut);
-        AnimMgr.AddChain(Label_GoldenLifeContenders3, "<a pos=\"5 -11\" opacity=\"1.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadInOut);
-        AnimMgr.AddChain(Label_GoldenLifeContendersDelta3, "<a pos=\"50 -11\" opacity=\"1.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.Flush(Quad_GoldenLifeContender);
+        AnimMgr.Flush(Label_GoldenLifeContender);
+        AnimMgr.Flush(Label_GoldenLifeContenderTime);
+
+        AnimMgr.AddChain(Quad_GoldenLifeContender, "<a pos=\"0 -" ^ TL::ToText(0 + (5 * I)) ^ "\" opacity=\"0.6\"/>", I * Interval, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContender, "<a pos=\"5 -" ^ TL::ToText(1 + (5 * I)) ^ "\" opacity=\"1.0\"/>", I * Interval, CAnimManager::EAnimManagerEasing::QuadInOut);
+        AnimMgr.AddChain(Label_GoldenLifeContenderTime, "<a pos=\"50 -" ^ TL::ToText(1 + (5 * I)) ^ "\" opacity=\"1.0\"/>", I * Interval, CAnimManager::EAnimManagerEasing::QuadInOut);
     }
 
 }
 
-Void HideGoldenLifeContenders() {
+Void HideGoldenLifeContenders(Text[][] _GoldenLifeContenders) {
     declare CMlFrame Frame_GoldenLifeContenders <=> (Page.GetFirstChild("frame-golden-contenders") as CMlFrame);
+    declare Integer Interval = 400 / ML::Max(_GoldenLifeContenders.count - 1, 1);
+    declare Integer Duration = 500 / ML::Max(_GoldenLifeContenders.count - 1, 1);
 
-    declare CMlQuad Quad_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-2") as CMlQuad);
-    declare CMlLabel Label_GoldenLifeContenders2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-2") as CMlLabel);
-    declare CMlLabel Label_GoldenLifeContendersDelta2 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-2") as CMlLabel);
-    AnimMgr.Flush(Quad_GoldenLifeContenders2);
-    AnimMgr.Flush(Label_GoldenLifeContenders2);
-    AnimMgr.Flush(Label_GoldenLifeContendersDelta2);
-    AnimMgr.Add(Quad_GoldenLifeContenders2, "<a pos=\"0 0\" opacity=\"0.0\"/>", Now+200, 250, CAnimManager::EAnimManagerEasing::QuadOut);
-    AnimMgr.Add(Label_GoldenLifeContenders2, "<a pos=\"5 -1\" opacity=\"0.0\"/>", Now+200, 250, CAnimManager::EAnimManagerEasing::QuadOut);
-    AnimMgr.Add(Label_GoldenLifeContendersDelta2, "<a pos=\"50 -1\" opacity=\"0.0\"/>", Now+200, 250, CAnimManager::EAnimManagerEasing::QuadOut);
+    for (I, 1, _GoldenLifeContenders.count - 1) {
+        declare CMlQuad Quad_GoldenLifeContender <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-" ^ TL::ToText(I + 1)) as CMlQuad);
+        declare CMlLabel Label_GoldenLifeContender <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-" ^ TL::ToText(I + 1)) as CMlLabel);
+        declare CMlLabel Label_GoldenLifeContenderTime <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-time-" ^ TL::ToText(I + 1)) as CMlLabel);
 
-    declare CMlQuad Quad_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("quad-golden-contenders-3") as CMlQuad);
-    declare CMlLabel Label_GoldenLifeContenders3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-3") as CMlLabel);
-    declare CMlLabel Label_GoldenLifeContendersDelta3 <=> (Frame_GoldenLifeContenders.GetFirstChild("label-golden-contenders-delta-3") as CMlLabel);
-    AnimMgr.Flush(Quad_GoldenLifeContenders3);
-    AnimMgr.Flush(Label_GoldenLifeContenders3);
-    AnimMgr.Flush(Label_GoldenLifeContendersDelta3);
-    AnimMgr.AddChain(Quad_GoldenLifeContenders3, "<a pos=\"0 0\" opacity=\"0.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadOut);
-    AnimMgr.AddChain(Label_GoldenLifeContenders3, "<a pos=\"5 -1\" opacity=\"0.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadOut);
-    AnimMgr.AddChain(Label_GoldenLifeContendersDelta3, "<a pos=\"50 -1\" opacity=\"0.0\"/>", 500, CAnimManager::EAnimManagerEasing::QuadOut);
+        declare Integer StartTime = Interval * (_GoldenLifeContenders.count - 1 - I);
+
+        AnimMgr.Flush(Quad_GoldenLifeContender);
+        AnimMgr.Flush(Label_GoldenLifeContender);
+        AnimMgr.Flush(Label_GoldenLifeContenderTime);
+
+        AnimMgr.Add(Quad_GoldenLifeContender, "<a pos=\"0 0\" opacity=\"0.0\"/>", Now+StartTime, Duration * (_GoldenLifeContenders.count - 1), CAnimManager::EAnimManagerEasing::QuadOut);
+        AnimMgr.Add(Label_GoldenLifeContender, "<a pos=\"5 -1\" opacity=\"0.0\"/>", Now+StartTime, Duration * (_GoldenLifeContenders.count - 1), CAnimManager::EAnimManagerEasing::QuadOut);
+        AnimMgr.Add(Label_GoldenLifeContenderTime, "<a pos=\"50 -1\" opacity=\"0.0\"/>", Now+StartTime, Duration * (_GoldenLifeContenders.count - 1), CAnimManager::EAnimManagerEasing::QuadOut);
+    }
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -2028,7 +2029,7 @@ main() {
             if (GoldenLifeContendersShouldShow) {
                 ShowGoldenLifeContenders(GoldenLifeContenders);
             } else {
-                HideGoldenLifeContenders();
+                HideGoldenLifeContenders(GoldenLifeContenders);
             }
             GoldenLifeContendersShouldShow_Previous = GoldenLifeContendersShouldShow;
         }
@@ -2153,7 +2154,6 @@ main() {
                             (Event.Control as CMlLabel).TextColor = CL::HexToRgb("FFFFFF");
                         }
                         case "quad-golden-life-contenders-hover": {
-                            // HideGoldenLifeContenders();
                             GoldenLifeContendersExpanded = False;
                             log("GoldenLifeContendersExpanded = False");
                         }
